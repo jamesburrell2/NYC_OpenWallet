@@ -33,9 +33,11 @@ import com.openwallet.core.coins.NeoscoinMain;
 import com.openwallet.core.coins.NovacoinMain;
 import com.openwallet.core.coins.NuBitsMain;
 import com.openwallet.core.coins.NuSharesMain;
+import com.openwallet.core.coins.NewYorkCoinMain;
 import com.openwallet.core.coins.NxtMain;
 import com.openwallet.core.coins.OKCashMain;
 import com.openwallet.core.coins.ParkbyteMain;
+import com.openwallet.core.coins.ZcashMain;
 import com.openwallet.core.coins.PeercoinMain;
 import com.openwallet.core.coins.PotcoinMain;
 import com.openwallet.core.coins.ReddcoinMain;
@@ -214,7 +216,10 @@ public class Constants {
             new CoinAddress(RichcoinMain.get(),     new ServerAddress("richx-cce-1.coinomi.net", 5046),
                                                     new ServerAddress("richx-cce-2.coinomi.net", 5046)),
             new CoinAddress(IxcoinMain.get(),       new ServerAddress("ixc-cce-1.coinomi.net", 5047),
-                                                    new ServerAddress("ixc-cce-2.coinomi.net", 5047))
+                                                    new ServerAddress("ixc-cce-2.coinomi.net", 5047)),
+            new CoinAddress(ZcashMain.get(),
+                    new ServerAddress("electrum.z.cash", 50002),
+                    new ServerAddress("electrum2.z.cash", 50002))
     );
 
     public static final HashMap<CoinType, Integer> COINS_ICONS;
@@ -264,6 +269,8 @@ public class Constants {
         COINS_ICONS.put(CoinID.CLUBCOIN_MAIN.getCoinType(), R.drawable.clubcoin);
         COINS_ICONS.put(CoinID.RICHCOIN_MAIN.getCoinType(), R.drawable.richcoin);
         COINS_ICONS.put(CoinID.IXCOIN_MAIN.getCoinType(), R.drawable.ixcoin);
+        COINS_ICONS.put(CoinID.NEWYORKCOIN_MAIN.getCoinType(), R.drawable.newyorkcoin);
+        COINS_ICONS.put(CoinID.ZCASH_MAIN.getCoinType(), R.drawable.zcash);
 
         COINS_BLOCK_EXPLORERS = new HashMap<CoinType, String>();
         COINS_BLOCK_EXPLORERS.put(CoinID.BITCOIN_MAIN.getCoinType(), "https://blockchain.info/tx/%s");
@@ -306,10 +313,14 @@ public class Constants {
         COINS_BLOCK_EXPLORERS.put(CoinID.EGULDEN_MAIN.getCoinType(), "https://chainz.cryptoid.info/efl/tx.dws?%s");
         COINS_BLOCK_EXPLORERS.put(CoinID.RICHCOIN_MAIN.getCoinType(), "https://explorer.richcoin.us/transaction?transaction=%s");
         COINS_BLOCK_EXPLORERS.put(CoinID.IXCOIN_MAIN.getCoinType(), "https://chainz.cryptoid.info/ixc/tx.dws?%s");
+        COINS_BLOCK_EXPLORERS.put(CoinID.NEWYORKCOIN_MAIN.getCoinType(),
+                "https://explorer.newyorkcoin.net/tx/%s");
+        COINS_BLOCK_EXPLORERS.put(CoinID.ZCASH_MAIN.getCoinType(),
+                "https://explorer.zcha.in/transactions/%s");
     }
 
-    public static final CoinType DEFAULT_COIN = BitcoinMain.get();
-    public static final List<CoinType> DEFAULT_COINS = ImmutableList.of((CoinType) BitcoinMain.get());
+    public static final CoinType DEFAULT_COIN = NewYorkCoinMain.get();
+    public static final List<CoinType> DEFAULT_COINS = ImmutableList.of((CoinType) NewYorkCoinMain.get());
     public static final ArrayList<String> DEFAULT_TEST_COIN_IDS = Lists.newArrayList(
             BitcoinTest.get().getId(),
             LitecoinTest.get().getId(),
@@ -317,6 +328,7 @@ public class Constants {
     );
 
     public static final List<CoinType> SUPPORTED_COINS = ImmutableList.of(
+            NewYorkCoinMain.get(),
             BitcoinMain.get(),
             AsiacoinMain.get(),
             AuroracoinMain.get(),
@@ -331,6 +343,7 @@ public class Constants {
             DigibyteMain.get(),
             DigitalcoinMain.get(),
             DogecoinMain.get(),
+            ZcashMain.get(),
             EguldenMain.get(),
             FeathercoinMain.get(),
             GcrMain.get(),
