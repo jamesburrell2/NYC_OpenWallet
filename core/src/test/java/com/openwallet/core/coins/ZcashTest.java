@@ -31,7 +31,7 @@ public class ZcashTest {
     }
 
     @Test
-    public void roundTripPreservesHash160() throws Exception {
+    public void roundTripPreservesHash160() {
         byte[] hash160 = new byte[20];
         for (int i = 0; i < 20; i++) hash160[i] = (byte) (i + 1);
         ZcashAddress encoded = ZcashAddress.fromHash160(0x1CB8, hash160);
@@ -40,7 +40,7 @@ public class ZcashTest {
     }
 
     @Test
-    public void roundTripPreservesVersion() throws Exception {
+    public void roundTripPreservesVersion() {
         ZcashAddress addr = ZcashAddress.fromHash160(0x1CB8, ZERO_HASH160);
         ZcashAddress decoded = ZcashAddress.fromString(addr.toString());
         assertEquals(0x1CB8, decoded.getVersion());
