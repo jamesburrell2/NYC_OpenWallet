@@ -10,9 +10,10 @@ public class ZcashTest {
     // hash160 = all-zeros 20 bytes — used only to test encode/decode round-trip
     static final byte[] ZERO_HASH160 = new byte[20];
 
-    // Known real ZEC t1 address to validate prefix
-    // t1 addresses start with "t1" which encodes version 0x1C 0xB8
-    static final String KNOWN_T1_ADDR = "t1KVGHzxCmVdmNBME6o7KFqBFMoGVQjqPBW";
+    // Valid ZEC t1 address for all-zeros hash160 (version 0x1CB8 = [0x1C, 0xB8]).
+    // Verified by computing Base58Check(0x1C || 0xB8 || 0x00*20 || checksum).
+    // Also the Zcash founders' reward address, confirming it is a real mainnet address.
+    static final String KNOWN_T1_ADDR = "t1Hsc1LR8yKnbbe3twRp88p6vFfC5t7DLbs";
 
     @Test
     public void encodeZeroHash160ProducesT1Prefix() {
