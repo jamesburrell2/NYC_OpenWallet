@@ -1,5 +1,7 @@
 package com.openwallet.core.coins;
 
+import com.openwallet.core.coins.NewYorkCoinMain;
+import com.openwallet.core.coins.ZcashMain;
 import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.util.GenericUtils;
 import com.google.common.collect.ImmutableList;
@@ -22,6 +24,8 @@ import java.util.Set;
  * @author John L. Jegutanis
  */
 public enum CoinID {
+    NEWYORKCOIN_MAIN(NewYorkCoinMain.get()),  // PRIMARY — must be first
+    ZCASH_MAIN(ZcashMain.get()),
     BITCOIN_MAIN(BitcoinMain.get()),
     BITCOIN_TEST(BitcoinTest.get()),
     LITECOIN_MAIN(LitecoinMain.get()),
