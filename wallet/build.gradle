@@ -1,13 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdk 35
-    namespace "com.newyorkcoin.openwallet"
+    compileSdk 33
+    namespace "com.openwallet.wallet"
 
     defaultConfig {
         applicationId "com.newyorkcoin.openwallet"
         minSdk 26
-        targetSdk 35
+        targetSdk 33
         versionCode 56
         versionName "v1.6.3"
     }
@@ -45,4 +45,6 @@ dependencies {
     implementation 'ch.acra:acra:4.8.5'
     implementation 'com.android.support:support-v4-preferencefragment:1.0.0@aar'
     implementation 'com.jakewharton:butterknife:7.0.1'
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'com.squareup.okhttp:okhttp:2.7.5'
 }
