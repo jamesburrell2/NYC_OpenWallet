@@ -53,11 +53,11 @@ public class ZcashAddress implements AbstractAddress {
         } catch (AddressFormatException e) {
             throw new IllegalArgumentException("Invalid Base58 address: " + address, e);
         }
-        if (decoded.length < 26) {
-            throw new IllegalArgumentException("Decoded address too short: " + decoded.length);
+        if (decoded.length != 26) {
+            throw new IllegalArgumentException("Decoded address must be 26 bytes, got: " + decoded.length);
         }
         // Last 4 bytes are checksum
-        byte[] payload = Arrays.copyOfRange(decoded, 0, decoded.length - 4);
+        byte[] payload = Arrays.copyOfRange(decoded, 0, 22);
         byte[] checksum = Arrays.copyOfRange(decoded, decoded.length - 4, decoded.length);
 
         // Verify checksum: first 4 bytes of double-SHA256 of payload
