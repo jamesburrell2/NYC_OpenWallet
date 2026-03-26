@@ -18,7 +18,9 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import android.support.annotation.Nullable;
 import com.openwallet.core.coins.CoinType;
+import com.openwallet.core.coins.NewYorkCoinMain;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.util.GenericUtils;
 import com.openwallet.core.wallet.AbstractTransaction;
@@ -61,7 +63,8 @@ import butterknife.OnItemClick;
  * Use the {@link BalanceFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class BalanceFragment extends WalletFragment implements LoaderCallbacks<List<AbstractTransaction>> {
+public class BalanceFragment extends WalletFragment implements LoaderCallbacks<List<AbstractTransaction>>,
+        NycServerConfigDialog.OnNycServerConfiguredListener {
     private static final Logger log = LoggerFactory.getLogger(BalanceFragment.class);
 
     private static final int WALLET_CHANGED = 0;
@@ -94,6 +97,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     @Bind(R.id.account_balance) Amount accountBalance;
     @Bind(R.id.account_exchanged_balance) Amount accountExchangedBalance;
     @Bind(R.id.connection_label) TextView connectionLabel;
+    private View noServerBanner;
     private TransactionsListAdapter adapter;
     private Listener listener;
     private ContentResolver resolver;
@@ -201,6 +205,15 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
         View header = inflater.inflate(R.layout.fragment_balance_header, null);
         list.addHeaderView(header, null, true);
 
+        noServerBanner = header.findViewById(R.id.no_server_banner);
+        noServerBanner.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                NycServerConfigDialog.newInstance()
+                        .show(getChildFragmentManager(), "nyc_server_config");
+            }
+        });
+
         // Set a space in the end of the list
         View listFooter = new View(inflater.getContext());
         listFooter.setMinimumHeight(
@@ -298,6 +311,22 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
         }
     }
 
+    private void updateNoServerBanner() {
+        if (noServerBanner == null) return;
+        boolean showBanner = type != null
+                && type.equals(NewYorkCoinMain.get())
+                && config.getNycElectrumServer() == null;
+        noServerBanner.setVisibility(showBanner ? View.VISIBLE : View.GONE);
+    }
+
+    @Override
+    public void onNycServerConfigured(@Nullable String hostPort) {
+        if (hostPort != null) {
+            config.setNycElectrumServer(hostPort);
+        }
+        updateNoServerBanner();
+    }
+
     private final ThrottlingWalletChangeListener walletChangeListener = new ThrottlingWalletChangeListener() {
 
         @Override
@@ -339,6 +368,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     @Override
     public void onResume() {
         super.onResume();
+        updateNoServerBanner();
 
         resolver.registerContentObserver(AddressBookProvider.contentUri(
                 getActivity().getPackageName(), type), true, addressBookObserver);

@@ -63,4 +63,18 @@
             android:textColor="@color/gray_26_hint_text"
             android:textSize="@dimen/history_empty" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/no_server_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFFDE7"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="No ElectrumX server configured — tap to set up"
+        android:textColor="#F57F17"
+        android:textSize="13sp"
+        android:visibility="gone" />
 </LinearLayout>
