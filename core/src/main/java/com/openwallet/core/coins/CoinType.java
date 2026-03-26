@@ -6,9 +6,11 @@ import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.messages.MessageFactory;
 import com.openwallet.core.util.MonetaryFormat;
 import com.openwallet.core.wallet.AbstractAddress;
+import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.google.common.base.Charsets;
 
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.HDUtils;
@@ -229,5 +231,19 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
 
     public interface FeeProvider {
         Value getFeeValue(CoinType type);
+    }
+
+    /**
+     * Create an address for this coin type from a public key.
+     * Default: P2PKH BitAddress. Override in ZcashFamily to return ZcashAddress.
+     * Throws RuntimeException (not checked) — WrongNetworkException cannot fire
+     * when deriving from a key's own hash160.
+     */
+    public AbstractAddress addressFromKey(ECKey key) {
+        try {
+            return BitAddress.from(this, key.getPubKeyHash());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to derive address for " + getName(), e);
+        }
     }
 }
