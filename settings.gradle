@@ -1,4 +1,1 @@
-// ':wallet' uses legacy 'compile' config incompatible with Gradle 8.x.
-// Wallet build migration handled in Task 11. Re-enable after Task 11.
-// include ':wallet', ':core'
-include ':core'
+include ':wallet', ':core'
