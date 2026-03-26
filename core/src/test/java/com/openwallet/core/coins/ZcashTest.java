@@ -1,6 +1,10 @@
 package com.openwallet.core.coins;
 
 import org.junit.Test;
+import org.bitcoinj.crypto.DeterministicHierarchy;
+import org.bitcoinj.crypto.DeterministicKey;
+import org.bitcoinj.crypto.HDKeyDerivation;
+import org.bitcoinj.wallet.DeterministicSeed;
 
 import static org.junit.Assert.*;
 
@@ -69,5 +73,36 @@ public class ZcashTest {
         // A single-byte implementation would parse version as 0xB8 and fail this assertion.
         ZcashAddress addr = ZcashAddress.fromString(KNOWN_T1_ADDR);
         assertEquals(0x1CB8, addr.getVersion());
+    }
+
+    @Test
+    public void zecAddressFromKeyStartsWithT1() throws Exception {
+        CoinType zec = ZcashMain.get();
+        DeterministicSeed seed = new DeterministicSeed(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            null, "", 0);
+        DeterministicKey master = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes());
+        DeterministicHierarchy h = new DeterministicHierarchy(master);
+        DeterministicKey accountKey = h.get(zec.getBip44Path(0), false, true);
+        DeterministicKey receiveKey = HDKeyDerivation.deriveChildKey(accountKey, 0);
+        DeterministicKey addrKey = HDKeyDerivation.deriveChildKey(receiveKey, 0);
+        String address = zec.addressFromKey(addrKey).toString();
+        assertTrue("ZEC address must start with t1, got: " + address,
+                address.startsWith("t1"));
+    }
+
+    @Test
+    public void zecCoinIdEndsWithMain() {
+        assertEquals("zcash.main", ZcashMain.get().getId());
+    }
+
+    @Test
+    public void zecBip44IndexIs133() {
+        assertEquals(133, ZcashMain.get().getBip44Index());
+    }
+
+    @Test
+    public void zecSingletonReturnsSameInstance() {
+        assertSame(ZcashMain.get(), ZcashMain.get());
     }
 }
