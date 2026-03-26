@@ -1,9 +1,6 @@
 package com.openwallet.core.coins;
 
-import org.bitcoinj.core.Base58;
 import org.junit.Test;
-
-import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -49,8 +46,8 @@ public class ZcashTest {
         assertEquals(0x1CB8, decoded.getVersion());
     }
 
-    @Test(expected = Exception.class)
-    public void invalidChecksumThrows() throws Exception {
+    @Test(expected = IllegalArgumentException.class)
+    public void invalidChecksumThrows() {
         // Corrupt the last character of a valid address
         String corrupted = KNOWN_T1_ADDR.substring(0, KNOWN_T1_ADDR.length() - 1) + "X";
         ZcashAddress.fromString(corrupted);
@@ -62,5 +59,14 @@ public class ZcashTest {
         int len = addr.toString().length();
         assertTrue("Address length " + len + " not in expected range [34,36]",
                 len >= 34 && len <= 36);
+    }
+
+    @Test
+    public void knownAddressParsesCorrectVersion() {
+        // KNOWN_T1_ADDR is a real Zcash mainnet address.
+        // Verifies fromString uses 2-byte version (0x1CB8=7352), not 1-byte (0xB8=184).
+        // A single-byte implementation would parse version as 0xB8 and fail this assertion.
+        ZcashAddress addr = ZcashAddress.fromString(KNOWN_T1_ADDR);
+        assertEquals(0x1CB8, addr.getVersion());
     }
 }
