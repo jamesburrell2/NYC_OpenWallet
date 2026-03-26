@@ -32,7 +32,7 @@ public class NewYorkCoinTest {
 
     @Test
     public void coinIdEndsWithMain() {
-        assertEquals("nyc.main", NewYorkCoinMain.get().getId());
+        assertEquals("newyorkcoin.main", NewYorkCoinMain.get().getId());
     }
 
     @Test

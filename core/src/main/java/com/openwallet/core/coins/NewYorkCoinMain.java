@@ -4,7 +4,7 @@ import com.openwallet.core.coins.families.BitFamily;
 
 public class NewYorkCoinMain extends BitFamily {
     private NewYorkCoinMain() {
-        id = "nyc.main";
+        id = "newyorkcoin.main";
 
         addressHeader = 52;           // 0x34 → N... prefix
         p2shHeader = 22;              // 0x16
