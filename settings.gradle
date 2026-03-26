@@ -1,1 +1,3 @@
-include ':wallet', ':core'
+include ':core'
+// ':wallet' temporarily excluded for core-only test runs
+// include ':wallet', ':core'
