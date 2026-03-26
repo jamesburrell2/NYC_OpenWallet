@@ -4,14 +4,17 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.widget.Toast;
 
 import com.openwallet.core.coins.CoinID;
 import com.openwallet.core.coins.CoinType;
+import com.openwallet.core.coins.NewYorkCoinMain;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
 import com.openwallet.wallet.Constants;
 import com.openwallet.wallet.R;
+import com.openwallet.wallet.WalletApplication;
 import com.openwallet.wallet.tasks.AddCoinTask;
 import com.openwallet.wallet.ui.dialogs.ConfirmAddCoinUnlockWalletDialog;
 
@@ -23,7 +26,8 @@ import javax.annotation.CheckForNull;
 
 public class AddCoinsActivity extends BaseWalletActivity
         implements SelectCoinsFragment.Listener, AddCoinTask.Listener,
-        ConfirmAddCoinUnlockWalletDialog.Listener {
+        ConfirmAddCoinUnlockWalletDialog.Listener,
+        NycServerConfigDialog.OnNycServerConfiguredListener {
 
     private static final String ADD_COIN_TASK_BUSY_DIALOG_TAG = "add_coin_task_busy_dialog_tag";
     private static final String ADD_COIN_DIALOG_TAG = "ADD_COIN_DIALOG_TAG";
@@ -63,6 +67,27 @@ public class AddCoinsActivity extends BaseWalletActivity
             return;
         }
 
+        // For NYC, show server config dialog before proceeding
+        if (selectedCoin.equals(NewYorkCoinMain.get())) {
+            String existingServer = ((WalletApplication) getApplication())
+                    .getConfiguration().getNycElectrumServer();
+            if (existingServer == null) {
+                NycServerConfigDialog.newInstance()
+                        .show(getSupportFragmentManager(), "nyc_server_config");
+                return; // showAddCoinDialog() will be called from onNycServerConfigured()
+            }
+        }
+
+        showAddCoinDialog();
+    }
+
+    @Override
+    public void onNycServerConfigured(@Nullable String hostPort) {
+        if (hostPort != null) {
+            ((WalletApplication) getApplication())
+                    .getConfiguration().setNycElectrumServer(hostPort);
+        }
+        // Proceed with coin creation (server may be null — wallet shows banner)
         showAddCoinDialog();
     }
 
