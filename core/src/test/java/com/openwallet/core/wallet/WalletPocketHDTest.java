@@ -17,6 +17,7 @@ import com.openwallet.core.network.ServerClient.UnspentTx;
 import com.openwallet.core.network.interfaces.ConnectionEventListener;
 import com.openwallet.core.network.interfaces.TransactionEventListener;
 import com.openwallet.core.protos.Protos;
+import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitBlockchainConnection;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
@@ -189,12 +190,12 @@ public class WalletPocketHDTest {
 
     @Test
     public void issuedKeys() throws Bip44KeyLookAheadExceededException {
-        List<BitAddress> issuedAddresses = new ArrayList<>();
+        List<AbstractAddress> issuedAddresses = new ArrayList<>();
         assertEquals(0, pocket.getIssuedReceiveAddresses().size());
         assertEquals(0, pocket.keys.getNumIssuedExternalKeys());
 
         issuedAddresses.add(0, pocket.currentAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS));
-        BitAddress freshAddress = pocket.getFreshReceiveAddress();
+        AbstractAddress freshAddress = pocket.getFreshReceiveAddress();
         assertEquals(freshAddress, pocket.currentAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS));
         assertEquals(1, pocket.getIssuedReceiveAddresses().size());
         assertEquals(1, pocket.keys.getNumIssuedExternalKeys());
@@ -268,7 +269,7 @@ public class WalletPocketHDTest {
     private Sha256Hash send(Value value, WalletPocketHD w1, WalletPocketHD w2) throws Exception {
         assertEquals(w1.getCoinType(), w2.getCoinType());
         CoinType type = w1.getCoinType();
-        BitSendRequest req = w1.sendCoinsOffline(w2.getReceiveAddress(), value);
+        BitSendRequest req = w1.sendCoinsOffline((BitAddress) w2.getReceiveAddress(), value);
         req.feePerTxSize = type.value("0.01");
         w1.completeAndSignTx(req);
         byte[] txBytes = req.tx.bitcoinSerialize();
@@ -286,7 +287,7 @@ public class WalletPocketHDTest {
         WalletPocketHD account3 = new WalletPocketHD(h.get(BTC.getBip44Path(2), false, true), BTC, null, null);
 
         Transaction tx = new Transaction(BTC);
-        tx.addOutput(BTC.oneCoin().toCoin(), account1.getReceiveAddress());
+        tx.addOutput(BTC.oneCoin().toCoin(), (BitAddress) account1.getReceiveAddress());
         tx.getConfidence().setSource(Source.SELF);
         account1.addNewTransactionIfNeeded(tx);
 
@@ -356,13 +357,13 @@ public class WalletPocketHDTest {
         assertEquals(67, pocket.addressesStatus.size());
         assertEquals(67, pocket.addressesSubscribed.size());
 
-        BitAddress receiveAddr = pocket.getReceiveAddress();
+        AbstractAddress receiveAddr = pocket.getReceiveAddress();
         // This key is not issued
         assertEquals(18, pocket.keys.getNumIssuedExternalKeys());
         assertEquals(67, pocket.addressesStatus.size());
         assertEquals(67, pocket.addressesSubscribed.size());
 
-        DeterministicKey key = pocket.keys.findKeyFromPubHash(receiveAddr.getHash160());
+        DeterministicKey key = pocket.keys.findKeyFromPubHash(((BitAddress) receiveAddr).getHash160());
         assertNotNull(key);
         // 18 here is the key index, not issued keys count
         assertEquals(18, key.getChildNumber().num());
@@ -374,7 +375,7 @@ public class WalletPocketHDTest {
     public void serializeTransactionsBtc() throws Exception, Bip44KeyLookAheadExceededException {
         WalletPocketHD account = new WalletPocketHD(rootKey, BTC, null, null);
         Transaction tx = new Transaction(BTC);
-        tx.addOutput(BTC.oneCoin().toCoin(), account.getReceiveAddress());
+        tx.addOutput(BTC.oneCoin().toCoin(), (BitAddress) account.getReceiveAddress());
         account.addNewTransactionIfNeeded(tx);
         testWalletSerializationForCoin(account);
     }
@@ -383,7 +384,7 @@ public class WalletPocketHDTest {
     public void serializeTransactionsNbt() throws Exception, Bip44KeyLookAheadExceededException {
         WalletPocketHD account = new WalletPocketHD(rootKey, NBT, null, null);
         Transaction tx = new Transaction(NBT);
-        tx.addOutput(NBT.oneCoin().toCoin(), account.getReceiveAddress());
+        tx.addOutput(NBT.oneCoin().toCoin(), (BitAddress) account.getReceiveAddress());
         account.addNewTransactionIfNeeded(tx);
         testWalletSerializationForCoin(account);
     }
@@ -394,7 +395,7 @@ public class WalletPocketHDTest {
         // Test tx with null extra bytes
         Transaction tx = new Transaction(VPN);
         tx.setTime(0x99999999);
-        tx.addOutput(VPN.oneCoin().toCoin(), account.getFreshReceiveAddress());
+        tx.addOutput(VPN.oneCoin().toCoin(), (BitAddress) account.getFreshReceiveAddress());
         account.addNewTransactionIfNeeded(tx);
         WalletPocketHD newAccount = testWalletSerializationForCoin(account);
         Transaction newTx = newAccount.getRawTransaction(tx.getHash());
@@ -405,7 +406,7 @@ public class WalletPocketHDTest {
         tx = new Transaction(VPN);
         tx.setTime(0x99999999);
         tx.setExtraBytes(new byte[0]);
-        tx.addOutput(VPN.oneCoin().toCoin(), account.getFreshReceiveAddress());
+        tx.addOutput(VPN.oneCoin().toCoin(), (BitAddress) account.getFreshReceiveAddress());
         account.addNewTransactionIfNeeded(tx);
         newAccount = testWalletSerializationForCoin(account);
         newTx = newAccount.getRawTransaction(tx.getHash());
@@ -417,7 +418,7 @@ public class WalletPocketHDTest {
         tx.setTime(0x99999999);
         byte[] bytes = {0x1, 0x2, 0x3};
         tx.setExtraBytes(bytes);
-        tx.addOutput(VPN.oneCoin().toCoin(), account.getFreshReceiveAddress());
+        tx.addOutput(VPN.oneCoin().toCoin(), (BitAddress) account.getFreshReceiveAddress());
         account.addNewTransactionIfNeeded(tx);
         newAccount = testWalletSerializationForCoin(account);
         newTx = newAccount.getRawTransaction(tx.getHash());

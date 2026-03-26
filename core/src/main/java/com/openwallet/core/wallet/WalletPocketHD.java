@@ -24,6 +24,7 @@ import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.exceptions.Bip44KeyLookAheadExceededException;
 import com.openwallet.core.protos.Protos;
 import com.openwallet.core.util.KeyUtils;
+import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
 import com.google.common.annotations.VisibleForTesting;
@@ -273,16 +274,16 @@ public class WalletPocketHD extends BitWalletBase {
     }
 
     @Override
-    public BitAddress getChangeAddress() {
+    public AbstractAddress getChangeAddress() {
         return currentAddress(CHANGE);
     }
 
     @Override
-    public BitAddress getReceiveAddress() {
+    public AbstractAddress getReceiveAddress() {
         return currentAddress(RECEIVE_FUNDS);
     }
 
-    public BitAddress getRefundAddress() { return currentAddress(REFUND); }
+    public AbstractAddress getRefundAddress() { return currentAddress(REFUND); }
 
     @Override
     public boolean hasUsedAddresses() {
@@ -295,12 +296,12 @@ public class WalletPocketHD extends BitWalletBase {
     }
 
     @Override
-    public BitAddress getReceiveAddress(boolean isManualAddressManagement) {
+    public AbstractAddress getReceiveAddress(boolean isManualAddressManagement) {
         return getAddress(RECEIVE_FUNDS, isManualAddressManagement);
     }
 
     @Override
-    public BitAddress getRefundAddress(boolean isManualAddressManagement) {
+    public AbstractAddress getRefundAddress(boolean isManualAddressManagement) {
         return getAddress(REFUND, isManualAddressManagement);
     }
 
@@ -308,12 +309,12 @@ public class WalletPocketHD extends BitWalletBase {
      * Get the last used receiving address
      */
     @Nullable
-    public BitAddress getLastUsedAddress(SimpleHDKeyChain.KeyPurpose purpose) {
+    public AbstractAddress getLastUsedAddress(SimpleHDKeyChain.KeyPurpose purpose) {
         lock.lock();
         try {
             DeterministicKey lastUsedKey = keys.getLastIssuedKey(purpose);
             if (lastUsedKey != null) {
-                return BitAddress.from(type, lastUsedKey);
+                return type.addressFromKey(lastUsedKey);
             } else {
                 return null;
             }
@@ -359,7 +360,7 @@ public class WalletPocketHD extends BitWalletBase {
      * {@link Bip44KeyLookAheadExceededException} if we requested too many addresses that
      * exceed the BIP44 look ahead threshold.
      */
-    public BitAddress getFreshReceiveAddress() throws Bip44KeyLookAheadExceededException {
+    public AbstractAddress getFreshReceiveAddress() throws Bip44KeyLookAheadExceededException {
         lock.lock();
         try {
             if (!canCreateFreshReceiveAddress()) {
@@ -373,12 +374,12 @@ public class WalletPocketHD extends BitWalletBase {
         }
     }
 
-    public BitAddress getFreshReceiveAddress(boolean isManualAddressManagement)
+    public AbstractAddress getFreshReceiveAddress(boolean isManualAddressManagement)
             throws Bip44KeyLookAheadExceededException {
         lock.lock();
         try {
-            BitAddress newAddress = null;
-            BitAddress freshAddress = getFreshReceiveAddress();
+            AbstractAddress newAddress = null;
+            AbstractAddress freshAddress = getFreshReceiveAddress();
             if (isManualAddressManagement) {
                 newAddress = getLastUsedAddress(RECEIVE_FUNDS);
             }
@@ -428,7 +429,7 @@ public class WalletPocketHD extends BitWalletBase {
             Collections.sort(issuedKeys, HD_KEY_COMPARATOR);
 
             for (ECKey key : issuedKeys) {
-                receiveAddresses.add(BitAddress.from(type, key));
+                receiveAddresses.add(type.addressFromKey(key));
             }
             return receiveAddresses;
         } finally {
@@ -456,9 +457,9 @@ public class WalletPocketHD extends BitWalletBase {
         }
     }
 
-    public BitAddress getAddress(SimpleHDKeyChain.KeyPurpose purpose,
+    public AbstractAddress getAddress(SimpleHDKeyChain.KeyPurpose purpose,
                               boolean isManualAddressManagement) {
-        BitAddress receiveAddress = null;
+        AbstractAddress receiveAddress = null;
         if (isManualAddressManagement) {
             receiveAddress = getLastUsedAddress(purpose);
         }
@@ -472,10 +473,10 @@ public class WalletPocketHD extends BitWalletBase {
     /**
      * Get the currently latest unused address by purpose.
      */
-    @VisibleForTesting BitAddress currentAddress(SimpleHDKeyChain.KeyPurpose purpose) {
+    @VisibleForTesting AbstractAddress currentAddress(SimpleHDKeyChain.KeyPurpose purpose) {
         lock.lock();
         try {
-            return BitAddress.from(type, keys.getCurrentUnusedKey(purpose));
+            return type.addressFromKey(keys.getCurrentUnusedKey(purpose));
         } finally {
             lock.unlock();
             subscribeToAddressesIfNeeded();
@@ -507,7 +508,7 @@ public class WalletPocketHD extends BitWalletBase {
         try {
             ImmutableList.Builder<AbstractAddress> activeAddresses = ImmutableList.builder();
             for (DeterministicKey key : keys.getActiveKeys()) {
-                activeAddresses.add(BitAddress.from(type, key));
+                activeAddresses.add(type.addressFromKey(key));
             }
             return activeAddresses.build();
         } finally {
