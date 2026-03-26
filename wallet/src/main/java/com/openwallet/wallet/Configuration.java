@@ -58,6 +58,8 @@ public class Configuration {
 
     public static final String PREFS_KEY_TERMS_ACCEPTED = "terms_accepted";
 
+    private static final String PREFS_KEY_NYC_ELECTRUM_SERVER = "nyc_electrum_server";
+
     private static final int PREFS_DEFAULT_BTC_SHIFT = 3;
     private static final int PREFS_DEFAULT_BTC_PRECISION = 2;
 
@@ -244,6 +246,15 @@ public class Configuration {
 
     public void setTermAccepted(final boolean isTermsAccepted) {
         prefs.edit().putBoolean(PREFS_KEY_TERMS_ACCEPTED, isTermsAccepted).apply();
+    }
+
+    @Nullable
+    public String getNycElectrumServer() {
+        return prefs.getString(PREFS_KEY_NYC_ELECTRUM_SERVER, null);
+    }
+
+    public void setNycElectrumServer(final String hostPort) {
+        prefs.edit().putString(PREFS_KEY_NYC_ELECTRUM_SERVER, hostPort).apply();
     }
 
 }
