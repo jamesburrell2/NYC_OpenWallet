@@ -13,8 +13,11 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import android.text.format.DateUtils;
 
+import com.openwallet.core.coins.NewYorkCoinMain;
+import com.openwallet.core.network.CoinAddress;
 import com.openwallet.core.network.ConnectivityHelper;
 import com.openwallet.core.network.ServerClients;
+import com.openwallet.stratumj.ServerAddress;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
@@ -239,6 +242,20 @@ public class CoinServiceImpl extends Service implements CoinService {
         ServerClients newClients = new ServerClients(Constants.DEFAULT_COINS_SERVERS, connHelper);
         if (application.getTxCachePath() != null) {
             newClients.setCacheDir(application.getTxCachePath(), Constants.TX_CACHE_SIZE);
+        }
+        // NYC: ElectrumX server is configured at runtime — not in DEFAULT_COINS_SERVERS.
+        // getServerClients() is called at startup and on every reconnection, so this
+        // injection covers all connection paths.
+        String nycServer = application.getConfiguration().getNycElectrumServer();
+        if (nycServer != null && !nycServer.isEmpty()) {
+            int lastColon = nycServer.lastIndexOf(':');
+            String host = nycServer.substring(0, lastColon);
+            int port = Integer.parseInt(nycServer.substring(lastColon + 1));
+            newClients.addCoinAddress(new CoinAddress(
+                NewYorkCoinMain.get(),
+                new ServerAddress(host, port),
+                new ServerAddress(host, port)
+            ));
         }
         return newClients;
     }

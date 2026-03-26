@@ -49,6 +49,14 @@ public class ServerClients {
         }
     }
 
+    /**
+     * Dynamically add a coin address not present in the static DEFAULT_COINS_SERVERS.
+     * Used to inject the NYC ElectrumX server address at runtime.
+     */
+    public void addCoinAddress(CoinAddress coinAddress) {
+        addresses.put(coinAddress.getType(), coinAddress);
+    }
+
     public void resetAccount(WalletAccount account) {
         BlockchainConnection connection = connections.get(account.getCoinType());
         if (connection == null) return;
