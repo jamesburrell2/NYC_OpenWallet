@@ -18,7 +18,7 @@ public abstract class BitFamily extends CoinType {
     }
 
     @Override
-    public BitAddress newAddress(String addressStr) throws AddressMalformedException {
+    public AbstractAddress newAddress(String addressStr) throws AddressMalformedException {
         return BitAddress.from(this, addressStr);
     }
 }

@@ -3,7 +3,6 @@ package com.openwallet.core.coins.families;
 import com.openwallet.core.coins.ZcashAddress;
 import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.wallet.AbstractAddress;
-import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 
 import org.bitcoinj.core.ECKey;
 
@@ -16,15 +15,16 @@ import org.bitcoinj.core.ECKey;
  *
  * Overrides newAddress(String) and addressFromKey(ECKey) to use ZcashAddress
  * (2-byte Base58Check) instead of BitAddress (1-byte).
+ *
+ * Note: BitFamily.newAddress() return type was widened to AbstractAddress to
+ * allow this override to return ZcashAddress (which does not extend BitAddress).
  */
 public abstract class ZcashFamily extends BitFamily {
 
     @Override
-    public BitAddress newAddress(String addressStr) throws AddressMalformedException {
+    public AbstractAddress newAddress(String addressStr) throws AddressMalformedException {
         try {
-            ZcashAddress addr = ZcashAddress.fromString(addressStr);
-            // ZcashAddress is returned as AbstractAddress, which is compatible with BitAddress's contract
-            return (BitAddress) (Object) addr;
+            return ZcashAddress.fromString(addressStr);
         } catch (IllegalArgumentException e) {
             throw new AddressMalformedException(e);
         }
