@@ -90,6 +90,10 @@ public class SegwitAddressTest {
         byte[] outputKey = new byte[32];
         java.util.Arrays.fill(outputKey, (byte) 0x02);
         TaprootAddress addr = TaprootAddress.fromOutputKey(BTC, outputKey);
+        // Establish precondition: fromXOnlyKey DOES change this input (tweak is not identity)
+        TaprootAddress tweaked = TaprootAddress.fromXOnlyKey(BTC, outputKey);
+        assertFalse("Precondition: tweak must not be identity on test input",
+            java.util.Arrays.equals(outputKey, tweaked.getOutputKey()));
         // fromOutputKey must NOT apply the BIP341 tweak again — output key must be stored as-is
         assertArrayEquals(outputKey, addr.getOutputKey());
     }
