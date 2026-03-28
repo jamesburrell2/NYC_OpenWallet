@@ -84,6 +84,26 @@ public class SegwitAddressTest {
         assertEquals("bc", BTC.getBech32Hrp());
     }
 
+    @Test
+    public void fromOutputKey_storesKeyWithoutRetweak() {
+        // A known 32-byte x-only output key (all-0x02 bytes, for testing only)
+        byte[] outputKey = new byte[32];
+        java.util.Arrays.fill(outputKey, (byte) 0x02);
+        TaprootAddress addr = TaprootAddress.fromOutputKey(BTC, outputKey);
+        // fromOutputKey must NOT apply the BIP341 tweak again — output key must be stored as-is
+        assertArrayEquals(outputKey, addr.getOutputKey());
+    }
+
+    @Test
+    public void fromOutputKey_rejectsWrongLength() {
+        try {
+            TaprootAddress.fromOutputKey(BTC, new byte[31]);
+            fail("Expected IllegalArgumentException for wrong key length");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("32 bytes"));
+        }
+    }
+
     private static byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] data = new byte[len / 2];

@@ -56,6 +56,17 @@ public final class TaprootAddress implements AbstractAddress, Serializable {
         return fromXOnlyKey(type, xOnly);
     }
 
+    /**
+     * Create from an already-tweaked 32-byte x-only output key
+     * (e.g. decoded directly from a bech32m address string).
+     * Does NOT apply the BIP341 key-path tweak.
+     */
+    public static TaprootAddress fromOutputKey(CoinType type, byte[] outputKey32) {
+        if (outputKey32.length != 32)
+            throw new IllegalArgumentException("output key must be 32 bytes, got: " + outputKey32.length);
+        return new TaprootAddress(type, outputKey32);
+    }
+
     public byte[] getOutputKey() { return Arrays.copyOf(outputKey32, 32); }
 
     @Override
