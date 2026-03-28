@@ -205,11 +205,10 @@ public class AddressRequestFragment extends WalletFragment {
                     getString(R.string.address_type_compatible),
                     getString(R.string.address_type_legacy) };
 
-            int firstId = View.generateViewId();
             for (int i = 0; i < displayOrder.length; i++) {
                 if (!type.getSupportedAddressTypes().contains(displayOrder[i])) continue;
                 RadioButton btn = new RadioButton(getActivity());
-                btn.setId(firstId + i);
+                btn.setId(View.generateViewId());
                 btn.setText(tabLabels[i]);
                 btn.setTag(displayOrder[i]);
                 btn.setLayoutParams(new RadioGroup.LayoutParams(
@@ -364,6 +363,12 @@ public class AddressRequestFragment extends WalletFragment {
         receiveAddress = null;
         if (showAddress != null) {
             receiveAddress = showAddress;
+            // Hide tab strip and derivation path when showing a historical address
+            if (type.getSupportedAddressTypes().size() > 1) {
+                addressTypeRadioGroup.setVisibility(View.GONE);
+                derivationPathView.setVisibility(View.GONE);
+            }
+            return;
         } else {
             AbstractAddress legacyAddr = account.getReceiveAddress();
             if (selectedAddressType == AddressType.LEGACY || type.getSupportedAddressTypes().size() == 1) {
