@@ -27,6 +27,7 @@ import com.openwallet.core.protos.Protos;
 import com.openwallet.core.util.KeyUtils;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -531,11 +532,14 @@ public class WalletPocketHD extends BitWalletBase {
     public void markAddressAsUsed(AbstractAddress address) {
         checkArgument(address.getType().equals(type), "Wrong address type");
         if (address instanceof BitAddress) {
-            markAddressAsUsed((BitAddress)address);
+            markAddressAsUsed((BitAddress) address);
+        } else if (address instanceof SegwitAddress) {
+            // SegwitAddress shares the same HASH160 as the corresponding legacy key,
+            // so markPubHashAsUsed correctly advances the HD keychain.
+            keys.markPubHashAsUsed(((SegwitAddress) address).getHash160());
         } else {
-            throw new IllegalArgumentException("Wrong address class");
+            throw new IllegalArgumentException("Wrong address class: " + address.getClass());
         }
-
     }
 
     public void markAddressAsUsed(BitAddress address) {
