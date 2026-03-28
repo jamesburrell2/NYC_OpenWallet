@@ -935,6 +935,22 @@ public class SendFragment extends WalletFragment {
 
                     // Try to fix address if needed
                     parseAddress(GenericUtils.fixAddress(input));
+                    // Block Taproot destinations (receive-only in this release)
+                    if (address != null) {
+                        try {
+                            com.openwallet.core.util.Bech32.DecodedBech32 decoded =
+                                    com.openwallet.core.util.Bech32.decode(address.toString());
+                            if (decoded.witnessVersion == 1) {
+                                clearAddress(false);
+                                addressError.setText(R.string.taproot_destination_not_supported);
+                                addressError.setVisibility(View.VISIBLE);
+                                updateView();
+                                return;
+                            }
+                        } catch (IllegalArgumentException ignored) {
+                            // Not a bech32 address — OK
+                        }
+                    }
                 } else {
                     // empty field should not raise error message
                     clearAddress(false);

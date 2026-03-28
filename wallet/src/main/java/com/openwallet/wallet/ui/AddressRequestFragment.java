@@ -17,10 +17,15 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.FiatType;
 import com.openwallet.core.coins.Value;
@@ -32,6 +37,10 @@ import com.openwallet.core.util.ExchangeRate;
 import com.openwallet.core.util.GenericUtils;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.WalletAccount;
+import com.openwallet.core.wallet.families.bitcoin.BitAddress;
+
+import java.util.ArrayList;
+import java.util.List;
 import com.openwallet.wallet.AddressBookProvider;
 import com.openwallet.wallet.Configuration;
 import com.openwallet.wallet.Constants;
@@ -55,7 +64,6 @@ import butterknife.Bind;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
-import static com.openwallet.core.Preconditions.checkNotNull;
 import static com.openwallet.wallet.ExchangeRatesProvider.getRate;
 
 /**
@@ -87,6 +95,9 @@ public class AddressRequestFragment extends WalletFragment {
     @Bind(R.id.request_coin_amount) AmountEditView sendCoinAmountView;
     @Bind(R.id.view_previous_addresses) View previousAddressesLink;
     @Bind(R.id.qr_code) ImageView qrView;
+    @Bind(R.id.address_type_spinner)   Spinner addressTypeSpinner;
+    @Bind(R.id.address_type_container) LinearLayout addressTypeContainer;
+    private AddressType selectedAddressType = AddressType.LEGACY;
     String lastQrContent;
     CurrencyCalculatorLink amountCalculatorLink;
     ContentResolver resolver;
@@ -164,8 +175,7 @@ public class AddressRequestFragment extends WalletFragment {
                 showAddress = (AbstractAddress) args.getSerializable(Constants.ARG_ADDRESS);
             }
         }
-        // TODO
-        account = checkNotNull(walletApplication.getAccount(accountId));
+        account = walletApplication.getAccount(accountId);
         if (account == null) {
             Toast.makeText(getActivity(), R.string.no_such_pocket_error, Toast.LENGTH_LONG).show();
             return;
@@ -180,7 +190,38 @@ public class AddressRequestFragment extends WalletFragment {
         View view = inflater.inflate(R.layout.fragment_request, container, false);
         ButterKnife.bind(this, view);
 
+        if (type == null) return view;
         sendCoinAmountView.resetType(type, true);
+
+        // Configure address type spinner for SegWit-capable coins
+        if (type.getSupportedAddressTypes().size() > 1) {
+            addressTypeContainer.setVisibility(View.VISIBLE);
+            final List<AddressType> addrTypes = new ArrayList<>();
+            List<String> labels = new ArrayList<>();
+            for (AddressType at : type.getSupportedAddressTypes()) {
+                addrTypes.add(at);
+                switch (at) {
+                    case LEGACY:        labels.add(getString(R.string.address_type_legacy)); break;
+                    case COMPATIBLE:    labels.add(getString(R.string.address_type_compatible)); break;
+                    case NATIVE_SEGWIT: labels.add(getString(R.string.address_type_native_segwit)); break;
+                    case TAPROOT:       labels.add(getString(R.string.address_type_taproot)); break;
+                    default:            labels.add(at.name()); break;
+                }
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(getActivity(),
+                    android.R.layout.simple_spinner_item, labels);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            addressTypeSpinner.setAdapter(adapter);
+            addressTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                    selectedAddressType = addrTypes.get(pos);
+                    updateView();
+                }
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {}
+            });
+        }
 
         AmountEditView sendLocalAmountView = ButterKnife.findById(view, R.id.request_local_amount);
         sendLocalAmountView.setFormat(FiatType.FRIENDLY_FORMAT);
@@ -192,6 +233,7 @@ public class AddressRequestFragment extends WalletFragment {
 
     @Override
     public void onViewStateRestored(@android.support.annotation.Nullable Bundle savedInstanceState) {
+        if (type == null) { super.onViewStateRestored(savedInstanceState); return; }
         ExchangeRatesProvider.ExchangeRate rate = getRate(getContext(), type.getSymbol(), config.getExchangeCurrencyCode());
         if (rate != null) updateExchangeRate(rate.rate);
         updateView();
@@ -231,6 +273,8 @@ public class AddressRequestFragment extends WalletFragment {
     public void onResume() {
         super.onResume();
 
+        if (account == null || type == null) return;
+
         account.addEventListener(walletListener);
         amountCalculatorLink.setListener(amountsListener);
         resolver.registerContentObserver(AddressBookProvider.contentUri(
@@ -243,8 +287,10 @@ public class AddressRequestFragment extends WalletFragment {
     public void onPause() {
         resolver.unregisterContentObserver(addressBookObserver);
         amountCalculatorLink.setListener(null);
-        account.removeEventListener(walletListener);
-        walletListener.removeCallbacks();
+        if (account != null) {
+            account.removeEventListener(walletListener);
+            walletListener.removeCallbacks();
+        }
 
         super.onPause();
     }
@@ -280,6 +326,7 @@ public class AddressRequestFragment extends WalletFragment {
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+        if (account == null || type == null) return; // account not found; loader would NPE
         getLoaderManager().initLoader(ID_RATE_LOADER, null, rateLoaderCallbacks);
     }
 
@@ -306,9 +353,26 @@ public class AddressRequestFragment extends WalletFragment {
         if (isRemoving() || isDetached()) return;
         receiveAddress = null;
         if (showAddress != null) {
-            receiveAddress =  showAddress;
+            receiveAddress = showAddress;
         } else {
-            receiveAddress = account.getReceiveAddress();
+            AbstractAddress legacyAddr = account.getReceiveAddress();
+            if (selectedAddressType == AddressType.LEGACY || type.getSupportedAddressTypes().size() == 1) {
+                receiveAddress = legacyAddr;
+            } else {
+                try {
+                    byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
+                    com.openwallet.core.wallet.WalletPocketHD pocketHD =
+                            (com.openwallet.core.wallet.WalletPocketHD) account;
+                    org.bitcoinj.core.ECKey key = pocketHD.findKeyFromPubHash(hash160);
+                    if (key != null) {
+                        receiveAddress = type.addressFromKey(key, selectedAddressType);
+                    } else {
+                        receiveAddress = legacyAddr;
+                    }
+                } catch (Exception e) {
+                    receiveAddress = legacyAddr;
+                }
+            }
         }
 
         // Don't show previous addresses link if we are showing a specific address

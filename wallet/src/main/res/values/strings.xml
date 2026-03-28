@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">OpenWallet (dev)</string>
-    <string name="app_package" translatable="false">com.openwallet.wallet.dev</string>
+    <string name="app_name" translatable="false">NYC OpenWallet</string>
+    <string name="app_package" translatable="false">com.newyorkcoin.openwallet</string>
     <string name="openwallet_website" translatable="false">https://openwallet.xyz</string>
     <string name="almost_equal_to" translatable="false">≈</string>
     <string name="action_scan_qr_code">Scan</string>
@@ -387,6 +387,17 @@
     <string name="sweep_wallet_key_loading">Loading balance&#8230;</string>
     <!-- &#8230; is the ... character -->
     <string name="sweep_wallet_key_signing">Creating transaction&#8230;</string>
+    <!-- Coin Servers settings -->
+    <string name="title_activity_coin_servers">Coin servers</string>
+    <!-- Example: "Set server for Bitcoin" -->
+    <string name="server_dialog_title">%1$s server</string>
+    <!-- Example: "Enter the ElectrumX server for Bitcoin (hostname:port)." -->
+    <string name="server_dialog_description">Enter the ElectrumX server for %1$s (hostname:port). Leave blank or tap Default to use the built-in server.</string>
+    <string name="server_address_hint">hostname:port</string>
+    <string name="server_not_configured">Not configured</string>
+    <!-- Short label shown next to a user-overridden server address -->
+    <string name="server_custom_label">(custom)</string>
+
     <!-- Fees settings -->
     <string name="title_activity_transaction_fees">Transaction fees</string>
     <!-- Example: Bitcoin transaction fees-->
@@ -451,5 +462,13 @@ The user of this wallet agrees to arbitrate any dispute arising from or in conne
 8. Last Amendment\n
 \n
 This disclaimer was amended for the last time on June 9th, 2017.</string>
+
+    <string name="address_type_label">Address type</string>
+    <string name="address_type_legacy">Legacy</string>
+    <string name="address_type_compatible">Compatible (P2SH)</string>
+    <string name="address_type_native_segwit">Native SegWit</string>
+    <string name="address_type_taproot">Taproot (receive only)</string>
+    <string name="taproot_receive_only_note">Taproot addresses can receive funds but cannot be spent from within this wallet yet.</string>
+    <string name="taproot_destination_not_supported">Taproot destinations are not yet supported. Use a Taproot-capable wallet to send to this address.</string>
 
 </resources>
