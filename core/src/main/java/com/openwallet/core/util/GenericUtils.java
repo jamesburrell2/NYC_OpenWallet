@@ -6,8 +6,11 @@ import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.coins.ValueType;
 import com.openwallet.core.exceptions.AddressMalformedException;
+import com.openwallet.core.coins.ZcashAddress;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
+import com.openwallet.core.wallet.families.bitcoin.TaprootAddress;
 import com.openwallet.core.wallet.families.nxt.NxtAddress;
 import com.google.common.collect.ImmutableList;
 
@@ -42,11 +45,29 @@ public class GenericUtils {
     public static String addressSplitToGroupsMultiline(final AbstractAddress address) {
         if (address instanceof NxtAddress) {
             return addressSplitToGroupsMultiline((NxtAddress) address);
+        } else if (address instanceof SegwitAddress || address instanceof TaprootAddress) {
+            return addressSplitToGroupsMultilineBech32(address.toString());
         } else if (address instanceof BitAddress) {
             return addressSplitToGroupsMultiline((BitAddress) address);
+        } else if (address instanceof ZcashAddress) {
+            String s = address.toString();
+            int mid = s.length() / 2;
+            return s.substring(0, mid) + "\n" + s.substring(mid);
         } else {
             throw new RuntimeException("Unsupported address: " + address.getClass());
         }
+    }
+
+    /** Split a bech32/bech32m address string at the separator '1', then break the data portion at mid. */
+    static String addressSplitToGroupsMultilineBech32(String addr) {
+        // bech32 separator is the last '1' before the data portion
+        // hrp is all lowercase letters, separator is '1', data is 6+ chars
+        int sep = addr.lastIndexOf('1');
+        if (sep < 1) return addr; // malformed, return as-is
+        String hrpPlusSep = addr.substring(0, sep + 1); // e.g. "bc1" or "ltc1"
+        String data = addr.substring(sep + 1);          // e.g. "q..." or "p..."
+        int mid = data.length() / 2;
+        return hrpPlusSep + data.substring(0, mid) + "\n" + data.substring(mid);
     }
 
     public static String addressSplitToGroupsMultiline(final NxtAddress address) {
@@ -79,6 +100,8 @@ public class GenericUtils {
     public static String addressSplitToGroups(final AbstractAddress address) {
         if (address instanceof NxtAddress) {
             return addressSplitToGroups((NxtAddress) address);
+        } else if (address instanceof SegwitAddress || address instanceof TaprootAddress) {
+            return address.toString(); // bech32 already has natural grouping; no-op split
         } else if (address instanceof BitAddress) {
             return addressSplitToGroups((BitAddress) address);
         } else {
