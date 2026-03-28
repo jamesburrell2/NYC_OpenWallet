@@ -46,6 +46,9 @@ public final class BitTransaction implements AbstractTransaction {
     final Value value;
     @Nullable final Value fee;
 
+    /** Per-input witness stacks keyed by input index. Null means no witness data (non-SegWit tx). */
+    @Nullable private Map<Integer, byte[][]> witnessData = null;
+
     public BitTransaction(Sha256Hash transactionId, Transaction transaction, boolean isTrimmed,
                           Value valueSent, Value valueReceived, @Nullable Value fee) {
         tx = checkNotNull(transaction);
@@ -326,9 +329,20 @@ public final class BitTransaction implements AbstractTransaction {
         }
     }
 
+    /** Set the per-input witness stacks for SegWit serialization. */
+    public void setWitnessData(Map<Integer, byte[][]> witnessData) {
+        this.witnessData = witnessData;
+    }
+
+    /** Returns the per-input witness stacks, or null if none. */
+    @Nullable
+    public Map<Integer, byte[][]> getWitnessData() {
+        return witnessData;
+    }
+
     public byte[] bitcoinSerialize() {
         checkState(!isTrimmed, "Cannot serialize a trimmed transaction");
-        return tx.bitcoinSerialize();
+        return com.openwallet.core.wallet.SegwitTransactionSerializer.serialize(tx, witnessData);
     }
 
     private BitTransaction getTrimTransaction(TransactionBag wallet) {

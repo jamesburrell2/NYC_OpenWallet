@@ -1,9 +1,11 @@
 package com.openwallet.core.wallet;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.FeePolicy;
 import com.openwallet.core.coins.Value;
 
+import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Utils;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
@@ -34,8 +36,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.openwallet.core.Preconditions.checkArgument;
@@ -211,8 +217,66 @@ public class TransactionCreator {
 
             KeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(account, req.aesKey);
 
+            // === BIP143 SegWit pre-signing pass ===
+            Map<Integer, byte[][]> witnessData = new HashMap<>();
+            java.util.Set<Integer> segwitInputs = new java.util.HashSet<>();
             int numInputs = tx.getInputs().size();
             for (int i = 0; i < numInputs; i++) {
+                TransactionInput txIn = tx.getInput(i);
+                if (txIn.getConnectedOutput() == null) continue;
+                Script scriptPubKey = txIn.getConnectedOutput().getScriptPubKey();
+                byte[] prog = scriptPubKey.getProgram();
+                boolean isNativeP2WPKH = prog.length == 22 && (prog[0] & 0xFF) == 0x00 && (prog[1] & 0xFF) == 0x14;
+                boolean isP2SH = scriptPubKey.isPayToScriptHash();
+
+                if (!isNativeP2WPKH && !isP2SH) continue;
+
+                ECKey signingKey = null;
+                byte[] pubKeyHash = null;
+
+                if (isNativeP2WPKH) {
+                    pubKeyHash = java.util.Arrays.copyOfRange(prog, 2, 22);
+                    signingKey = account.findKeyFromPubHash(pubKeyHash);
+                } else {
+                    // P2SH-P2WPKH: find the matching key
+                    byte[] outputScriptHash = scriptPubKey.getPubKeyHash();
+                    signingKey = findKeyForP2shP2wpkh(outputScriptHash);
+                    if (signingKey != null) pubKeyHash = signingKey.getPubKeyHash();
+                }
+
+                if (signingKey == null || pubKeyHash == null) continue;
+
+                // Use the decrypting key bag to obtain a plaintext key (handles encrypted wallets)
+                ECKey decryptedKey = maybeDecryptingKeyBag.findKeyFromPubHash(pubKeyHash);
+                if (decryptedKey == null) continue;
+
+                long utxoValue = txIn.getConnectedOutput().getValue().value;
+                byte[] sighash = bip143Sighash(tx, i, pubKeyHash, utxoValue);
+                ECKey.ECDSASignature sig = decryptedKey.sign(new Sha256Hash(sighash));
+                byte[] sigBytes = sig.encodeToDER();
+                byte[] sigWithHashType = new byte[sigBytes.length + 1];
+                System.arraycopy(sigBytes, 0, sigWithHashType, 0, sigBytes.length);
+                sigWithHashType[sigBytes.length] = 0x01; // SIGHASH_ALL
+
+                byte[] compressedPubKey = decryptedKey.getPubKey();
+                witnessData.put(i, new byte[][]{ sigWithHashType, compressedPubKey });
+                segwitInputs.add(i);
+
+                // For P2SH-P2WPKH: set scriptSig = push(redeemScript)
+                if (isP2SH) {
+                    byte[] redeemScript = buildP2WPKHRedeemScript(pubKeyHash);
+                    org.bitcoinj.script.ScriptBuilder sb = new org.bitcoinj.script.ScriptBuilder();
+                    sb.data(redeemScript);
+                    txIn.setScriptSig(sb.build());
+                }
+            }
+            if (!witnessData.isEmpty()) {
+                req.tx.setWitnessData(witnessData);
+            }
+            // ======================================
+
+            for (int i = 0; i < numInputs; i++) {
+                if (segwitInputs.contains(i)) continue; // already handled by BIP143 pass
                 TransactionInput txIn = tx.getInput(i);
                 if (txIn.getConnectedOutput() == null) {
                     log.warn("Missing connected output, assuming input {} is already signed.", i);
@@ -596,6 +660,72 @@ public class TransactionCreator {
             }
         }
         return null;
+    }
+
+    /** BIP143 sighash for P2WPKH input. scriptCode = P2PKH script over pubKeyHash. */
+    private static byte[] bip143Sighash(Transaction tx, int inputIndex,
+                                         byte[] pubKeyHash, long valueInSatoshis) {
+        try {
+            // scriptCode: varint(25) OP_DUP OP_HASH160 PUSH20 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+            byte[] scriptCode = new byte[26];
+            scriptCode[0] = 0x19; // varint: 25 bytes
+            scriptCode[1] = 0x76; scriptCode[2] = (byte) 0xa9; scriptCode[3] = 0x14;
+            System.arraycopy(pubKeyHash, 0, scriptCode, 4, 20);
+            scriptCode[24] = (byte) 0x88; scriptCode[25] = (byte) 0xac;
+
+            ByteArrayOutputStream ss = new ByteArrayOutputStream();
+            writeInt32LE(ss, (int) tx.getVersion());
+            // hashPrevouts
+            ByteArrayOutputStream prevouts = new ByteArrayOutputStream();
+            for (TransactionInput in : tx.getInputs()) {
+                prevouts.write(in.getOutpoint().bitcoinSerialize());
+            }
+            ss.write(Sha256Hash.createDouble(prevouts.toByteArray()).getBytes());
+            // hashSequence
+            ByteArrayOutputStream seqs = new ByteArrayOutputStream();
+            for (TransactionInput in : tx.getInputs()) {
+                writeInt32LE(seqs, (int) in.getSequenceNumber());
+            }
+            ss.write(Sha256Hash.createDouble(seqs.toByteArray()).getBytes());
+            // outpoint of this input
+            ss.write(tx.getInput(inputIndex).getOutpoint().bitcoinSerialize());
+            // scriptCode
+            ss.write(scriptCode);
+            // value (8 bytes LE)
+            writeInt64LE(ss, valueInSatoshis);
+            // nSequence
+            writeInt32LE(ss, (int) tx.getInput(inputIndex).getSequenceNumber());
+            // hashOutputs
+            ByteArrayOutputStream outs = new ByteArrayOutputStream();
+            for (TransactionOutput out : tx.getOutputs()) {
+                outs.write(out.bitcoinSerialize());
+            }
+            ss.write(Sha256Hash.createDouble(outs.toByteArray()).getBytes());
+            // nLocktime
+            writeInt32LE(ss, (int) tx.getLockTime());
+            // nHashType (SIGHASH_ALL = 1)
+            writeInt32LE(ss, 1);
+            return Sha256Hash.createDouble(ss.toByteArray()).getBytes();
+        } catch (IOException e) {
+            throw new RuntimeException("BIP143 sighash failed", e);
+        }
+    }
+
+    private static byte[] buildP2WPKHRedeemScript(byte[] pubKeyHash) {
+        byte[] script = new byte[22];
+        script[0] = 0x00;
+        script[1] = 0x14;
+        System.arraycopy(pubKeyHash, 0, script, 2, 20);
+        return script;
+    }
+
+    private static void writeInt32LE(ByteArrayOutputStream out, int v) throws IOException {
+        out.write(v & 0xff); out.write((v >> 8) & 0xff);
+        out.write((v >> 16) & 0xff); out.write((v >> 24) & 0xff);
+    }
+
+    private static void writeInt64LE(ByteArrayOutputStream out, long v) throws IOException {
+        for (int i = 0; i < 8; i++) { out.write((int) (v & 0xff)); v >>= 8; }
     }
 
     private static void resetTxInputs(Transaction tx, List<TransactionInput> originalInputs) {
