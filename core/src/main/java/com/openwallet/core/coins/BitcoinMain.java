@@ -1,6 +1,10 @@
 package com.openwallet.core.coins;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.families.BitFamily;
+
+import java.util.Collections;
+import java.util.EnumSet;
 
 /**
  * @author John L. Jegutanis
@@ -25,6 +29,12 @@ public class BitcoinMain extends BitFamily {
         softDustLimit = value(1000000); // 0.01 BTC
         softDustPolicy = SoftDustPolicy.AT_LEAST_BASE_FEE_IF_SOFT_DUST_TXO_PRESENT;
         signedMessageHeader = toBytes("Bitcoin Signed Message:\n");
+        bech32Hrp = "bc";
+        supportedAddressTypes = Collections.unmodifiableSet(EnumSet.of(
+                AddressType.LEGACY,
+                AddressType.COMPATIBLE,
+                AddressType.NATIVE_SEGWIT,
+                AddressType.TAPROOT));
     }
 
     private static BitcoinMain instance = new BitcoinMain();

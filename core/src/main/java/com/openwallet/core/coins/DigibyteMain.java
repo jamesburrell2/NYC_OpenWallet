@@ -1,6 +1,10 @@
 package com.openwallet.core.coins;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.families.BitFamily;
+
+import java.util.Collections;
+import java.util.EnumSet;
 
 /**
  * @author Digibyte
@@ -25,6 +29,12 @@ public class DigibyteMain extends BitFamily {
         softDustLimit = value(1000000);
         softDustPolicy = SoftDustPolicy.AT_LEAST_BASE_FEE_IF_SOFT_DUST_TXO_PRESENT;
         signedMessageHeader = toBytes("DigiByte Signed Message:\n");
+        bech32Hrp = "dgb";
+        supportedAddressTypes = Collections.unmodifiableSet(EnumSet.of(
+                AddressType.LEGACY,
+                AddressType.COMPATIBLE,
+                AddressType.NATIVE_SEGWIT,
+                AddressType.TAPROOT));
     }
 
     private static DigibyteMain instance = new DigibyteMain();

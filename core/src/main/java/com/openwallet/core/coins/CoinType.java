@@ -7,17 +7,23 @@ import com.openwallet.core.messages.MessageFactory;
 import com.openwallet.core.util.MonetaryFormat;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
+import com.openwallet.core.wallet.families.bitcoin.TaprootAddress;
 import com.google.common.base.Charsets;
 
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.Utils;
 import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.HDUtils;
 
 import java.io.Serializable;
 import java.math.BigInteger;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -43,6 +49,9 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
     protected SoftDustPolicy softDustPolicy;
     protected FeePolicy feePolicy = FeePolicy.FEE_PER_KB;
     protected byte[] signedMessageHeader;
+    protected Set<AddressType> supportedAddressTypes =
+            Collections.unmodifiableSet(EnumSet.of(AddressType.LEGACY));
+    protected String bech32Hrp = null;
 
     private transient MonetaryFormat friendlyFormat;
     private transient MonetaryFormat plainFormat;
@@ -117,6 +126,10 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
     public boolean canHandleMessages() {
         return getMessagesFactory() != null;
     }
+
+    public Set<AddressType> getSupportedAddressTypes() { return supportedAddressTypes; }
+
+    public String getBech32Hrp() { return bech32Hrp; }
 
     @Nullable
     public MessageFactory getMessagesFactory() {
@@ -244,6 +257,33 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
             return BitAddress.from(this, key.getPubKeyHash());
         } catch (Exception e) {
             throw new RuntimeException("Failed to derive address for " + getName(), e);
+        }
+    }
+
+    public AbstractAddress addressFromKey(ECKey key, AddressType type) {
+        switch (type) {
+            case LEGACY:
+                return addressFromKey(key);
+            case COMPATIBLE: {
+                // P2SH-P2WPKH: redeemScript = OP_0 <20-byte-key-hash>
+                byte[] pubKeyHash = key.getPubKeyHash();
+                byte[] redeemScript = new byte[22];
+                redeemScript[0] = 0x00; // OP_0
+                redeemScript[1] = 0x14; // PUSH 20
+                System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+                byte[] scriptHash = Utils.sha256hash160(redeemScript);
+                try {
+                    return BitAddress.from(this, p2shHeader, scriptHash);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to derive P2SH address for " + getName(), e);
+                }
+            }
+            case NATIVE_SEGWIT:
+                return SegwitAddress.fromKey(this, key);
+            case TAPROOT:
+                return TaprootAddress.fromKey(this, key);
+            default:
+                throw new IllegalArgumentException("Unknown address type: " + type);
         }
     }
 }

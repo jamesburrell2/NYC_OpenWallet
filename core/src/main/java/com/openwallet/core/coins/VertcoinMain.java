@@ -1,6 +1,10 @@
 package com.openwallet.core.coins;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.families.BitFamily;
+
+import java.util.Collections;
+import java.util.EnumSet;
 
 /**
  * @author John L. Jegutanis
@@ -25,6 +29,12 @@ public class VertcoinMain extends BitFamily {
         softDustLimit = value(100000); // 0.001 VTC
         softDustPolicy = SoftDustPolicy.BASE_FEE_FOR_EACH_SOFT_DUST_TXO;
         signedMessageHeader = toBytes("Vertcoin Signed Message:\n");
+        bech32Hrp = "vtc";
+        supportedAddressTypes = Collections.unmodifiableSet(EnumSet.of(
+                AddressType.LEGACY,
+                AddressType.COMPATIBLE,
+                AddressType.NATIVE_SEGWIT,
+                AddressType.TAPROOT));
     }
 
     private static VertcoinMain instance = new VertcoinMain();
