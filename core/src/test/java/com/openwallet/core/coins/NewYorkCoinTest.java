@@ -16,7 +16,7 @@ public class NewYorkCoinTest {
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     @Test
-    public void addressStartsWithN() throws MnemonicException, Exception {
+    public void addressStartsWithR() throws MnemonicException, Exception {
         CoinType nyc = NewYorkCoinMain.get();
         DeterministicSeed seed = new DeterministicSeed(MNEMONIC, null, "", 0);
         DeterministicKey master = HDKeyDerivation.createMasterPrivateKey(seed.getSeedBytes());
@@ -26,8 +26,8 @@ public class NewYorkCoinTest {
         DeterministicKey addrKey = HDKeyDerivation.deriveChildKey(receiveKey, 0);
 
         String address = nyc.addressFromKey(addrKey).toString();
-        assertTrue("NYC address must start with N, got: " + address,
-                address.startsWith("N"));
+        assertTrue("NYC address must start with R, got: " + address,
+                address.startsWith("R"));
     }
 
     @Test
