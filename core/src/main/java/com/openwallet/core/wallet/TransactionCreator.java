@@ -3,6 +3,9 @@ package com.openwallet.core.wallet;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.FeePolicy;
 import com.openwallet.core.coins.Value;
+
+import org.bitcoinj.core.Utils;
+import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
 import com.openwallet.core.wallet.families.bitcoin.CoinSelection;
 import com.openwallet.core.wallet.families.bitcoin.CoinSelector;
@@ -544,9 +547,22 @@ public class TransactionCreator {
                     }
                     checkNotNull(key, "Coin selection includes unspendable outputs");
                 } else if (script.isPayToScriptHash()) {
-                    throw new ScriptException("Wallet does not currently support PayToScriptHash");
-//                    redeemScript = keychain.findRedeemScriptFromPubHash(script.getPubKeyHash());
-//                    checkNotNull(redeemScript, "Coin selection includes unspendable outputs");
+                    // P2SH-P2WPKH: find the key whose P2WPKH redeemScript hashes to the output's scriptHash
+                    byte[] outputScriptHash = script.getPubKeyHash(); // for P2SH this is the 20-byte script hash
+                    key = findKeyForP2shP2wpkh(outputScriptHash);
+                    if (key != null) {
+                        byte[] pubKeyHash = key.getPubKeyHash();
+                        // redeemScript = OP_0 <20-byte-pubKeyHash>
+                        byte[] rawRedeem = new byte[22];
+                        rawRedeem[0] = 0x00;
+                        rawRedeem[1] = 0x14;
+                        System.arraycopy(pubKeyHash, 0, rawRedeem, 2, 20);
+                        redeemScript = new Script(rawRedeem);
+                    } else {
+                        // Unknown P2SH — use a conservative estimate: P2SH-P2WPKH input ≈ 297 bytes
+                        size += 297;
+                        continue;
+                    }
                 }
                 size += script.getNumberOfBytesRequiredToSpend(key, redeemScript);
             } catch (ScriptException e) {
@@ -556,6 +572,30 @@ public class TransactionCreator {
             }
         }
         return size;
+    }
+
+    /**
+     * For a P2SH-P2WPKH output, find the ECKey whose P2WPKH redeem script hashes to outputScriptHash.
+     * Returns null if no matching key is found.
+     */
+    private ECKey findKeyForP2shP2wpkh(byte[] outputScriptHash) {
+        for (AbstractAddress addr : account.getActiveAddresses()) {
+            if (!(addr instanceof com.openwallet.core.wallet.families.bitcoin.BitAddress)) continue;
+            com.openwallet.core.wallet.families.bitcoin.BitAddress ba =
+                    (com.openwallet.core.wallet.families.bitcoin.BitAddress) addr;
+            byte[] pubKeyHash = ba.getHash160();
+            ECKey candidate = account.findKeyFromPubHash(pubKeyHash);
+            if (candidate == null) continue;
+            byte[] redeemScript = new byte[22];
+            redeemScript[0] = 0x00;
+            redeemScript[1] = 0x14;
+            System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+            byte[] scriptHash = Utils.sha256hash160(redeemScript);
+            if (java.util.Arrays.equals(scriptHash, outputScriptHash)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static void resetTxInputs(Transaction tx, List<TransactionInput> originalInputs) {

@@ -18,6 +18,7 @@
 
 package com.openwallet.core.wallet;
 
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.exceptions.AddressMalformedException;
@@ -507,8 +508,18 @@ public class WalletPocketHD extends BitWalletBase {
         lock.lock();
         try {
             ImmutableList.Builder<AbstractAddress> activeAddresses = ImmutableList.builder();
+            Set<AddressType> supported = type.getSupportedAddressTypes();
             for (DeterministicKey key : keys.getActiveKeys()) {
-                activeAddresses.add(type.addressFromKey(key));
+                // Always emit legacy (all coins support it)
+                activeAddresses.add(type.addressFromKey(key, AddressType.LEGACY));
+                // Emit SegWit address types for coins that support them
+                if (supported.contains(AddressType.COMPATIBLE)) {
+                    activeAddresses.add(type.addressFromKey(key, AddressType.COMPATIBLE));
+                }
+                if (supported.contains(AddressType.NATIVE_SEGWIT)) {
+                    activeAddresses.add(type.addressFromKey(key, AddressType.NATIVE_SEGWIT));
+                }
+                // TAPROOT is receive/display only — not included in watch list
             }
             return activeAddresses.build();
         } finally {
