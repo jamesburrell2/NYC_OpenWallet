@@ -24,6 +24,8 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nonnull;
 
+import com.openwallet.core.util.Bech32;
+
 /**
  * @author Andreas Schildbach
  * @author John L. Jegutanis
@@ -248,6 +250,7 @@ public class GenericUtils {
     public static List<CoinType> getPossibleTypes(String addressStr) throws AddressMalformedException {
         ImmutableList.Builder<CoinType> builder = ImmutableList.builder();
         tryBitcoinFamilyAddresses(addressStr, builder);
+        tryBech32Addresses(addressStr, builder);
         // TODO try other coin addresses
         List<CoinType> possibleTypes = builder.build();
         if (possibleTypes.size() == 0) {
@@ -274,6 +277,23 @@ public class GenericUtils {
                     builder.add(type);
                     break;
                 }
+            }
+        }
+    }
+
+    /**
+     * Tries to parse addressStr as a bech32/bech32m address and find the matching coin by HRP.
+     */
+    private static void tryBech32Addresses(String addressStr, ImmutableList.Builder<CoinType> builder) {
+        Bech32.DecodedBech32 decoded;
+        try { decoded = Bech32.decode(addressStr); }
+        catch (IllegalArgumentException e) { return; }  // not bech32, silently ignore
+
+        for (CoinType type : CoinID.getSupportedCoins()) {
+            String hrp = type.getBech32Hrp();
+            if (hrp != null && hrp.equals(decoded.hrp)) {
+                builder.add(type);
+                break;
             }
         }
     }
