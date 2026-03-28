@@ -179,4 +179,14 @@
         <item name="android:textSize">@dimen/exchange_row_text_size_amount</item>
     </style>
 
+    <style name="AddressTypeTab" parent="@android:style/Widget.CompoundButton">
+        <item name="android:button">@null</item>
+        <item name="android:background">@drawable/address_tab_selector</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:gravity">center</item>
+    </style>
+
 </resources>

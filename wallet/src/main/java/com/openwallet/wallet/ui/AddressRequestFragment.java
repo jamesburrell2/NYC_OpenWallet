@@ -17,11 +17,9 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.Spinner;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -37,10 +35,12 @@ import com.openwallet.core.util.ExchangeRate;
 import com.openwallet.core.util.GenericUtils;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.WalletAccount;
+import com.openwallet.core.wallet.WalletPocketHD;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.bitcoinj.crypto.ChildNumber;
+import org.bitcoinj.crypto.DeterministicKey;
+
 import com.openwallet.wallet.AddressBookProvider;
 import com.openwallet.wallet.Configuration;
 import com.openwallet.wallet.Constants;
@@ -95,9 +95,9 @@ public class AddressRequestFragment extends WalletFragment {
     @Bind(R.id.request_coin_amount) AmountEditView sendCoinAmountView;
     @Bind(R.id.view_previous_addresses) View previousAddressesLink;
     @Bind(R.id.qr_code) ImageView qrView;
-    @Bind(R.id.address_type_spinner)   Spinner addressTypeSpinner;
-    @Bind(R.id.address_type_container) LinearLayout addressTypeContainer;
-    private AddressType selectedAddressType = AddressType.LEGACY;
+    @Bind(R.id.address_type_radio_group) RadioGroup addressTypeRadioGroup;
+    @Bind(R.id.derivation_path_view)     TextView derivationPathView;
+    private AddressType selectedAddressType = AddressType.NATIVE_SEGWIT;
     String lastQrContent;
     CurrencyCalculatorLink amountCalculatorLink;
     ContentResolver resolver;
@@ -193,33 +193,44 @@ public class AddressRequestFragment extends WalletFragment {
         if (type == null) return view;
         sendCoinAmountView.resetType(type, true);
 
-        // Configure address type spinner for SegWit-capable coins
+        // Configure address type tab strip for SegWit-capable coins
         if (type.getSupportedAddressTypes().size() > 1) {
-            addressTypeContainer.setVisibility(View.VISIBLE);
-            final List<AddressType> addrTypes = new ArrayList<>();
-            List<String> labels = new ArrayList<>();
-            for (AddressType at : type.getSupportedAddressTypes()) {
-                addrTypes.add(at);
-                switch (at) {
-                    case LEGACY:        labels.add(getString(R.string.address_type_legacy)); break;
-                    case COMPATIBLE:    labels.add(getString(R.string.address_type_compatible)); break;
-                    case NATIVE_SEGWIT: labels.add(getString(R.string.address_type_native_segwit)); break;
-                    case TAPROOT:       labels.add(getString(R.string.address_type_taproot)); break;
-                    default:            labels.add(at.name()); break;
-                }
+            addressTypeRadioGroup.setVisibility(View.VISIBLE);
+            derivationPathView.setVisibility(View.VISIBLE);
+
+            // Fixed display order: Default (NATIVE_SEGWIT), Compatibility (COMPATIBLE), Legacy (LEGACY)
+            final AddressType[] displayOrder = {
+                    AddressType.NATIVE_SEGWIT, AddressType.COMPATIBLE, AddressType.LEGACY };
+            final String[] tabLabels = {
+                    getString(R.string.address_type_default),
+                    getString(R.string.address_type_compatible),
+                    getString(R.string.address_type_legacy) };
+
+            int firstId = View.generateViewId();
+            for (int i = 0; i < displayOrder.length; i++) {
+                if (!type.getSupportedAddressTypes().contains(displayOrder[i])) continue;
+                RadioButton btn = new RadioButton(getActivity());
+                btn.setId(firstId + i);
+                btn.setText(tabLabels[i]);
+                btn.setTag(displayOrder[i]);
+                btn.setLayoutParams(new RadioGroup.LayoutParams(
+                        RadioGroup.LayoutParams.WRAP_CONTENT,
+                        RadioGroup.LayoutParams.WRAP_CONTENT));
+                btn.setButtonDrawable(android.R.color.transparent);
+                btn.setBackgroundResource(R.drawable.address_tab_selector);
+                btn.setTextColor(getResources().getColorStateList(R.color.address_tab_text_selector));
+                btn.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                btn.setTextSize(13f);
+                if (displayOrder[i] == selectedAddressType) btn.setChecked(true);
+                addressTypeRadioGroup.addView(btn);
             }
-            ArrayAdapter<String> adapter = new ArrayAdapter<>(getActivity(),
-                    android.R.layout.simple_spinner_item, labels);
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            addressTypeSpinner.setAdapter(adapter);
-            addressTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                    selectedAddressType = addrTypes.get(pos);
+
+            addressTypeRadioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+                View checkedBtn = group.findViewById(checkedId);
+                if (checkedBtn != null) {
+                    selectedAddressType = (AddressType) checkedBtn.getTag();
                     updateView();
                 }
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
             });
         }
 
@@ -387,6 +398,29 @@ public class AddressRequestFragment extends WalletFragment {
         updateLabel();
 
         updateQrCode(getUri());
+
+        // Populate derivation path for multi-type coins
+        if (type.getSupportedAddressTypes().size() > 1 && derivationPathView != null) {
+            try {
+                AbstractAddress legacyAddr = account.getReceiveAddress();
+                byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
+                WalletPocketHD pocketHD = (WalletPocketHD) account;
+                org.bitcoinj.core.ECKey rawKey = pocketHD.findKeyFromPubHash(hash160);
+                if (rawKey instanceof DeterministicKey) {
+                    DeterministicKey dk = (DeterministicKey) rawKey;
+                    StringBuilder path = new StringBuilder("M");
+                    for (ChildNumber child : dk.getPath()) {
+                        path.append('/').append(child.toString());
+                    }
+                    derivationPathView.setText(path.toString());
+                    derivationPathView.setVisibility(View.VISIBLE);
+                } else {
+                    derivationPathView.setVisibility(View.GONE);
+                }
+            } catch (Exception e) {
+                derivationPathView.setVisibility(View.GONE);
+            }
+        }
     }
 
     private String getUri() {
@@ -492,4 +526,8 @@ public class AddressRequestFragment extends WalletFragment {
             }
         }
     };
+
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
 }

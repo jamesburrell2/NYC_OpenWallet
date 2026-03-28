@@ -464,8 +464,9 @@ The user of this wallet agrees to arbitrate any dispute arising from or in conne
 This disclaimer was amended for the last time on June 9th, 2017.</string>
 
     <string name="address_type_label">Address type</string>
+    <string name="address_type_default">Default</string>
     <string name="address_type_legacy">Legacy</string>
-    <string name="address_type_compatible">Compatible (P2SH)</string>
+    <string name="address_type_compatible">Compatibility</string>
     <string name="address_type_native_segwit">Native SegWit</string>
     <string name="address_type_taproot">Taproot (receive only)</string>
     <string name="taproot_receive_only_note">Taproot addresses can receive funds but cannot be spent from within this wallet yet.</string>
