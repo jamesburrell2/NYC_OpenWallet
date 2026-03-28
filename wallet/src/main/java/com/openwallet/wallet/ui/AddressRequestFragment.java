@@ -196,7 +196,6 @@ public class AddressRequestFragment extends WalletFragment {
         // Configure address type tab strip for SegWit-capable coins
         if (type.getSupportedAddressTypes().size() > 1) {
             addressTypeRadioGroup.setVisibility(View.VISIBLE);
-            derivationPathView.setVisibility(View.VISIBLE);
 
             // Fixed display order: Default (NATIVE_SEGWIT), Compatibility (COMPATIBLE), Legacy (LEGACY)
             final AddressType[] displayOrder = {
