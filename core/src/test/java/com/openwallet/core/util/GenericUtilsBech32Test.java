@@ -5,7 +5,6 @@ import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
-import com.openwallet.core.wallet.families.bitcoin.TaprootAddress;
 import org.junit.Test;
 import java.util.List;
 import static org.junit.Assert.*;

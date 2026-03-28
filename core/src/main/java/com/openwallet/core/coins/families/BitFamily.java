@@ -8,8 +8,6 @@ import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 import com.openwallet.core.wallet.families.bitcoin.TaprootAddress;
 
-import org.bitcoinj.core.AddressFormatException;
-
 /**
  * @author John L. Jegutanis
  *

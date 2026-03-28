@@ -24,8 +24,6 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nonnull;
 
-import com.openwallet.core.util.Bech32;
-
 /**
  * @author Andreas Schildbach
  * @author John L. Jegutanis
