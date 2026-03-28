@@ -27,8 +27,8 @@ import com.openwallet.core.protos.Protos;
 import com.openwallet.core.util.KeyUtils;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
-import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
