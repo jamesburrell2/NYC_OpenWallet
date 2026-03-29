@@ -49,6 +49,7 @@ public final class CameraManager
     private static final int MAX_PREVIEW_PIXELS = 1280 * 720;
 
     private Camera camera;
+    private int openedCameraId = 0;
     private Camera.Size cameraResolution;
     private Rect frame;
     private Rect framePreview;
@@ -67,7 +68,8 @@ public final class CameraManager
 
     public Camera open(final SurfaceHolder holder, final boolean continuousAutoFocus) throws IOException
     {
-        // try back-facing camera
+        // try back-facing camera (Camera.open() opens camera 0 = back camera)
+        openedCameraId = 0;
         camera = Camera.open();
 
         // fall back to using front-facing camera
@@ -83,12 +85,29 @@ public final class CameraManager
                 if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
                 {
                     camera = Camera.open(i);
+                    openedCameraId = i;
                     break;
                 }
             }
         }
 
         camera.setPreviewDisplay(holder);
+
+        // Correct the preview rotation so it matches the portrait display.
+        // The camera sensor is typically mounted in landscape (orientation=90°); without this
+        // call the preview appears sideways and the QR decode crop rect is wrong.
+        final CameraInfo openedInfo = new CameraInfo();
+        Camera.getCameraInfo(openedCameraId, openedInfo);
+        // App is locked to sensorPortrait so display rotation is always 0°.
+        final int displayOrientation;
+        if (openedInfo.facing == CameraInfo.CAMERA_FACING_FRONT) {
+            // Front camera: add display rotation then mirror
+            displayOrientation = (360 - openedInfo.orientation) % 360;
+        } else {
+            // Back camera: subtract display rotation (which is 0 for portrait)
+            displayOrientation = openedInfo.orientation;
+        }
+        camera.setDisplayOrientation(displayOrientation);
 
         final Camera.Parameters parameters = camera.getParameters();
 
@@ -104,8 +123,25 @@ public final class CameraManager
         final int leftOffset = (surfaceWidth - frameSize) / 2;
         final int topOffset = (surfaceHeight - frameSize) / 2;
         frame = new Rect(leftOffset, topOffset, leftOffset + frameSize, topOffset + frameSize);
-        framePreview = new Rect(frame.left * cameraResolution.width / surfaceWidth, frame.top * cameraResolution.height / surfaceHeight, frame.right
-                * cameraResolution.width / surfaceWidth, frame.bottom * cameraResolution.height / surfaceHeight);
+        // Map the portrait-screen scan square to camera-native (landscape) coordinates.
+        // The camera sensor is in landscape (90° from portrait), so screen X maps to camera Y
+        // and screen Y maps to camera X. This produces a square crop in camera space,
+        // matching the square scan frame the user sees on screen.
+        if (surfaceWidth < surfaceHeight) {
+            // Portrait display + landscape sensor (the normal phone case)
+            framePreview = new Rect(
+                frame.top * cameraResolution.width / surfaceHeight,
+                cameraResolution.height - frame.right * cameraResolution.height / surfaceWidth,
+                frame.bottom * cameraResolution.width / surfaceHeight,
+                cameraResolution.height - frame.left * cameraResolution.height / surfaceWidth);
+        } else {
+            // Landscape display + landscape sensor (tablets, legacy path — keep original mapping)
+            framePreview = new Rect(
+                frame.left * cameraResolution.width / surfaceWidth,
+                frame.top * cameraResolution.height / surfaceHeight,
+                frame.right * cameraResolution.width / surfaceWidth,
+                frame.bottom * cameraResolution.height / surfaceHeight);
+        }
 
         final String savedParameters = parameters == null ? null : parameters.flatten();
 
