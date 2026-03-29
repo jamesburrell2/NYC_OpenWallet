@@ -130,7 +130,7 @@
         <activity
             android:name="com.openwallet.wallet.ui.ScanActivity"
             android:configChanges="orientation|keyboard|keyboardHidden"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorPortrait"
             android:stateNotNeeded="true"
             android:theme="@style/AppThemeNoTitleBar"
             android:windowSoftInputMode="stateAlwaysHidden" />
@@ -229,6 +229,14 @@
                 android:value="com.openwallet.wallet.ui.SettingsActivity" />
         </activity>
         <activity
+            android:name="com.openwallet.wallet.ui.ServerSettingsActivity"
+            android:label="@string/title_activity_coin_servers"
+            android:theme="@style/AppTheme" >
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.openwallet.wallet.ui.SettingsActivity" />
+        </activity>
+        <activity
             android:name="com.openwallet.wallet.ui.DebuggingActivity"
             android:label="@string/title_activity_debugging"
             android:theme="@style/AppTheme" >
@@ -239,15 +247,15 @@
 
         <provider
             android:name="com.openwallet.wallet.ExchangeRatesProvider"
-            android:authorities="com.openwallet.wallet.dev.exchange_rates"
+            android:authorities="${applicationId}.exchange_rates"
             android:exported="false" />
         <provider
             android:name="com.openwallet.wallet.AddressBookProvider"
-            android:authorities="com.openwallet.wallet.dev.address_book"
+            android:authorities="${applicationId}.address_book"
             android:exported="false" />
         <provider
             android:name=".ExchangeHistoryProvider"
-            android:authorities="com.openwallet.wallet.dev.exchange_history"
+            android:authorities="${applicationId}.exchange_history"
             android:exported="false" />
 
         <service

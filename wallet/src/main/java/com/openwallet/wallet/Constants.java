@@ -130,16 +130,16 @@ public class Constants {
 
     // TODO move to resource files
     public static final List<CoinAddress> DEFAULT_COINS_SERVERS = ImmutableList.of(
-            new CoinAddress(BitcoinMain.get(),      new ServerAddress("btc-cce-1.coinomi.net", 5001),
-                                                    new ServerAddress("btc-cce-2.coinomi.net", 5001)),
-            new CoinAddress(BitcoinTest.get(),      new ServerAddress("btc-testnet-cce-1.coinomi.net", 15001),
-                                                    new ServerAddress("btc-testnet-cce-2.coinomi.net", 15001)),
-            new CoinAddress(DogecoinMain.get(),     new ServerAddress("doge-cce-1.coinomi.net", 5003),
-                                                    new ServerAddress("doge-cce-2.coinomi.net", 5003)),
+            new CoinAddress(BitcoinMain.get(),      new ServerAddress("electrum.blockstream.info", 50002),
+                                                    new ServerAddress("electrum.bitaroo.net", 50002)),
+            new CoinAddress(BitcoinTest.get(),      new ServerAddress("electrum.blockstream.info", 60002),
+                                                    new ServerAddress("electrum.blockstream.info", 60002)),
+            new CoinAddress(DogecoinMain.get(),     new ServerAddress("electrum.dogecoin.network", 50002),
+                                                    new ServerAddress("electrumx-doge.lbr.network", 50002)),
             new CoinAddress(DogecoinTest.get(),     new ServerAddress("doge-testnet-cce-1.coinomi.net", 15003),
                                                     new ServerAddress("doge-testnet-cce-2.coinomi.net", 15003)),
-            new CoinAddress(LitecoinMain.get(),     new ServerAddress("ltc-cce-1.coinomi.net", 5002),
-                                                    new ServerAddress("ltc-cce-2.coinomi.net", 5002)),
+            new CoinAddress(LitecoinMain.get(),     new ServerAddress("electrum-ltc.bysh.me", 50002),
+                                                    new ServerAddress("electrum.ltc.xurious.com", 50002)),
             new CoinAddress(LitecoinTest.get(),     new ServerAddress("ltc-testnet-cce-1.coinomi.net", 15002),
                                                     new ServerAddress("ltc-testnet-cce-2.coinomi.net", 15002)),
             new CoinAddress(PeercoinMain.get(),     new ServerAddress("ppc-cce-1.coinomi.net", 5004),
@@ -219,7 +219,10 @@ public class Constants {
                                                     new ServerAddress("ixc-cce-2.coinomi.net", 5047)),
             new CoinAddress(ZcashMain.get(),
                     new ServerAddress("electrum.z.cash", 50002),
-                    new ServerAddress("electrum2.z.cash", 50002))
+                    new ServerAddress("electrum2.z.cash", 50002)),
+            new CoinAddress(NewYorkCoinMain.get(),
+                    new ServerAddress("electrum.newyorkcoin.online", 50002),
+                    new ServerAddress("electrum.newyorkcoin.online", 50002))
     );
 
     public static final HashMap<CoinType, Integer> COINS_ICONS;
