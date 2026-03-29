@@ -587,4 +587,15 @@ public class CoinURITest {
         new CoinURI(BitcoinTest.get(), BitcoinMain.get().getUriScheme() + ":" + MAINNET_GOOD_ADDRESS
                 + "?req-addressrequest=https%3A%2F%2Fcoinomi.com");
     }
+
+    @Test
+    public void testBech32AddressInCoinUri() throws Exception {
+        // Valid P2WPKH (bc1q) address for all-zeros 20-byte hash — ensures CoinURI can parse
+        // native SegWit addresses in a bitcoin: URI (regression for BitAddress.from bypass bug)
+        String bc1qAddress = "bc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9e75rs";
+        CoinURI uri = new CoinURI("bitcoin:" + bc1qAddress);
+        assertNotNull("CoinURI must parse bc1q address", uri.getAddress());
+        assertEquals("Address string must round-trip", bc1qAddress, uri.getAddress().toString());
+        assertEquals("Coin type must be BTC", BTC, uri.getAddress().getType());
+    }
 }

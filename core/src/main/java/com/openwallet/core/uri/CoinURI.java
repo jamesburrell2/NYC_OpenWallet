@@ -25,7 +25,6 @@ import com.openwallet.core.coins.families.NxtFamily;
 import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.util.GenericUtils;
 import com.openwallet.core.wallet.AbstractAddress;
-import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.nxt.NxtAddress;
 import com.google.common.collect.Lists;
 
@@ -215,7 +214,7 @@ public class CoinURI implements Serializable {
                     } catch (RuntimeException e) {  /* continue */ }
                 } else {
                     try {
-                        address = BitAddress.from(possibleType, addressToken);
+                        address = possibleType.newAddress(addressToken);
                         putWithValidation(FIELD_ADDRESS, address);
                         break;
                     } catch (final AddressMalformedException e) { /* continue */ }

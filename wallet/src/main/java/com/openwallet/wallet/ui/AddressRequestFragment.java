@@ -368,7 +368,6 @@ public class AddressRequestFragment extends WalletFragment {
                 addressTypeRadioGroup.setVisibility(View.GONE);
                 derivationPathView.setVisibility(View.GONE);
             }
-            return;
         } else {
             AbstractAddress legacyAddr = account.getReceiveAddress();
             if (selectedAddressType == AddressType.LEGACY || type.getSupportedAddressTypes().size() == 1) {
