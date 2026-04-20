@@ -75,6 +75,17 @@ public class CoinListItem extends LinearLayout implements Checkable {
         amount.setSingleLine(isSingleLine);
     }
 
+    public void setSubtitle(String subtitle) {
+        if (subtitle == null || subtitle.isEmpty()) {
+            amount.setVisibility(View.GONE);
+        } else {
+            amount.setAmount(subtitle);
+            amount.setSymbol("");
+            amount.setSingleLine(true);
+            amount.setVisibility(View.VISIBLE);
+        }
+    }
+
     @Override
     public void setChecked(boolean checked) {
         isChecked = checked;

@@ -34,6 +34,7 @@ import com.openwallet.core.wallet.AbstractTransaction.AbstractOutput;
 import com.openwallet.core.wallet.AbstractWallet;
 import com.openwallet.core.wallet.WalletAccount;
 import com.openwallet.wallet.Constants;
+import com.openwallet.wallet.R;
 
 import org.bitcoinj.core.Sha256Hash;
 
@@ -56,7 +57,8 @@ import static com.openwallet.core.Preconditions.checkState;
  */
 public class WalletUtils {
     public static int getIconRes(CoinType type) {
-        return Constants.COINS_ICONS.get(type);
+        Integer icon = Constants.COINS_ICONS.get(type);
+        return icon != null ? icon : R.drawable.ic_launcher;
     }
 
     public static int getIconRes(WalletAccount account) {

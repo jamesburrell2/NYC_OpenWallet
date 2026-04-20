@@ -257,4 +257,35 @@ public class Configuration {
         prefs.edit().putString(PREFS_KEY_NYC_ELECTRUM_SERVER, hostPort).apply();
     }
 
+    /**
+     * Returns the user-configured ElectrumX server for the given coin type, or null if none is
+     * set (meaning the app will use the built-in DEFAULT_COINS_SERVERS entry).
+     *
+     * For NewYorkCoin the legacy "nyc_electrum_server" preference is checked first so that
+     * existing user settings are not lost after this API was generalised.
+     */
+    @Nullable
+    public String getCoinElectrumServer(CoinType type) {
+        // Backward-compat: NYC was stored under its own dedicated key before this API existed.
+        if ("newyorkcoin.main".equals(type.getId())) {
+            String legacy = prefs.getString(PREFS_KEY_NYC_ELECTRUM_SERVER, null);
+            if (legacy != null && !legacy.isEmpty()) return legacy;
+        }
+        return prefs.getString("coin_server_" + type.getId(), null);
+    }
+
+    /**
+     * Persists a user-configured ElectrumX server for a coin. Pass null or an empty string to
+     * clear the override and fall back to the built-in DEFAULT_COINS_SERVERS entry.
+     */
+    public void setCoinElectrumServer(CoinType type, String hostPort) {
+        SharedPreferences.Editor editor = prefs.edit();
+        if (hostPort == null || hostPort.isEmpty()) {
+            editor.remove("coin_server_" + type.getId());
+        } else {
+            editor.putString("coin_server_" + type.getId(), hostPort);
+        }
+        editor.apply();
+    }
+
 }

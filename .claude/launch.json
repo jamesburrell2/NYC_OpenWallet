@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Core Tests",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": [":core:test", "--info"],
+      "port": null
+    },
+    {
+      "name": "Core Build",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": [":core:build"],
+      "port": null
+    }
+  ]
+}

@@ -15,6 +15,10 @@ public enum Families {
     REDDCOIN("reddcoin"),
     VPNCOIN("vpncoin"),
     CLAMS("clams"),
+    EVM("evm"),
+    SOLANA("solana"),
+    CARDANO("cardano"),
+    CHIA("chia"),
     ;
 
     public final String family;

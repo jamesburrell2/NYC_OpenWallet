@@ -1,20 +1,37 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdk 33
+    compileSdk 34
     namespace "com.openwallet.wallet"
 
     defaultConfig {
         applicationId "com.newyorkcoin.openwallet"
         minSdk 26
-        targetSdk 33
-        versionCode 56
-        versionName "v1.6.3"
+        targetSdk 34
+        versionCode 57
+        versionName "v1.7.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('newyorkcoin-release.keystore')
+            storePassword 'newyorkcoin123'
+            keyAlias 'newyorkcoin'
+            keyPassword 'newyorkcoin123'
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            // libscrypt has a pure-Java fallback; excluding allows install on x86_64 emulators
+            excludes += ['**/libscrypt.so']
+        }
     }
 
     buildTypes {
         release {
-            minifyEnabled true
+            signingConfig signingConfigs.release
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         debug {
@@ -29,21 +46,40 @@ repositories {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        // AndroidX brings listenablefuture:1.0 which clashes with full guava jar
+        force 'com.google.guava:guava:16.0.1'
+        // Force consistent kotlin-stdlib version across all transitive deps
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+    }
+    // Exclude the standalone listenablefuture artifact that conflicts with full guava
+    exclude group: 'com.google.guava', module: 'listenablefuture'
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation fileTree(dir: '../core/libs', include: ['*.jar'])
     implementation project(':core')
-    implementation 'com.android.support:gridlayout-v7:28.0.0'
-    implementation 'com.android.support:support-v4:28.0.0'
-    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'androidx.gridlayout:gridlayout:1.0.0'
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.fragment:fragment:1.6.2'
+    implementation 'androidx.loader:loader:1.1.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
+    implementation 'androidx.viewpager:viewpager:1.0.0'
+    implementation 'androidx.cursoradapter:cursoradapter:1.0.0'
     implementation 'com.google.guava:guava:16.0.1'
     implementation 'com.google.code.findbugs:jsr305:2.0.1'
     implementation 'com.madgag.spongycastle:core:1.51.0.0'
     implementation 'com.google.protobuf:protobuf-java:2.5.0'
     implementation 'com.google.zxing:core:3.1.0'
     implementation 'ch.acra:acra:4.8.5'
-    implementation 'com.android.support:support-v4-preferencefragment:1.0.0@aar'
     implementation 'com.jakewharton:butterknife:7.0.1'
+    annotationProcessor 'com.jakewharton:butterknife:7.0.1'
     implementation 'org.slf4j:slf4j-api:1.7.36'
     implementation 'com.squareup.okhttp:okhttp:2.7.5'
 }

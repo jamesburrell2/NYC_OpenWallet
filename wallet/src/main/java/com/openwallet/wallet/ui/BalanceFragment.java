@@ -7,10 +7,10 @@ import android.database.ContentObserver;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.os.Message;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.app.LoaderManager.LoaderCallbacks;
-import android.support.v4.content.AsyncTaskLoader;
-import android.support.v4.content.Loader;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.app.LoaderManager.LoaderCallbacks;
+import androidx.loader.content.AsyncTaskLoader;
+import androidx.loader.content.Loader;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,7 +18,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.NewYorkCoinMain;
 import com.openwallet.core.coins.Value;
@@ -97,7 +97,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     @Bind(R.id.account_balance) Amount accountBalance;
     @Bind(R.id.account_exchanged_balance) Amount accountExchangedBalance;
     @Bind(R.id.connection_label) TextView connectionLabel;
-    private View noServerBanner;
+    @Bind(R.id.no_server_banner) View noServerBanner;
     private TransactionsListAdapter adapter;
     private Listener listener;
     private ContentResolver resolver;
@@ -145,23 +145,32 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_balance, container, false);
-        addHeaderAndFooterToList(inflater, container, view);
         ButterKnife.bind(this, view);
 
+        // Wire up the no-server banner click now that ButterKnife has bound it
+        noServerBanner.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                NycServerConfigDialog.newInstance()
+                        .show(getChildFragmentManager(), "nyc_server_config");
+            }
+        });
+
+        addFooterToList(inflater);
         setupSwipeContainer();
 
-        // TODO show empty message
-        // Hide empty message if have some transaction history
-        if (pocket.getTransactions().size() > 0) {
-            emptyPocketMessage.setVisibility(View.GONE);
-        }
+        if (pocket != null) {
+            // Hide empty message if have some transaction history
+            if (pocket.getTransactions().size() > 0) {
+                emptyPocketMessage.setVisibility(View.GONE);
+            }
 
-        setupAdapter(inflater);
-        accountBalance.setSymbol(type.getSymbol());
-        exchangeRate = ExchangeRatesProvider.getRate(
-                application.getApplicationContext(), type.getSymbol(), config.getExchangeCurrencyCode());
-        // Update the amount
-        updateBalance(pocket.getBalance());
+            setupAdapter(inflater);
+            accountBalance.setSymbol(type.getSymbol());
+            exchangeRate = ExchangeRatesProvider.getRate(
+                    application.getApplicationContext(), type.getSymbol(), config.getExchangeCurrencyCode());
+            updateBalance(pocket.getBalance());
+        }
 
         return view;
     }
@@ -198,27 +207,11 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
                 R.color.progress_bar_color_4);
     }
 
-    private void addHeaderAndFooterToList(LayoutInflater inflater, ViewGroup container, View view) {
-        ListView list = ButterKnife.findById(view, R.id.transaction_rows);
-
-        // Initialize header
-        View header = inflater.inflate(R.layout.fragment_balance_header, null);
-        list.addHeaderView(header, null, true);
-
-        noServerBanner = header.findViewById(R.id.no_server_banner);
-        noServerBanner.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                NycServerConfigDialog.newInstance()
-                        .show(getChildFragmentManager(), "nyc_server_config");
-            }
-        });
-
-        // Set a space in the end of the list
+    private void addFooterToList(LayoutInflater inflater) {
         View listFooter = new View(inflater.getContext());
         listFooter.setMinimumHeight(
                 getResources().getDimensionPixelSize(R.dimen.activity_vertical_margin));
-        list.addFooterView(listFooter);
+        transactionRows.addFooterView(listFooter);
     }
 
     private void setupConnectivityStatus() {
@@ -352,6 +345,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+        if (pocket == null || type == null) return; // account not found; loaders would NPE
         getLoaderManager().initLoader(ID_TRANSACTION_LOADER, null, this);
         getLoaderManager().initLoader(ID_RATE_LOADER, null, rateLoaderCallbacks);
     }
@@ -370,6 +364,8 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
         super.onResume();
         updateNoServerBanner();
 
+        if (pocket == null || type == null) return;
+
         resolver.registerContentObserver(AddressBookProvider.contentUri(
                 getActivity().getPackageName(), type), true, addressBookObserver);
 
@@ -382,8 +378,10 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
 
     @Override
     public void onPause() {
-        pocket.removeEventListener(walletChangeListener);
-        walletChangeListener.removeCallbacks();
+        if (pocket != null) {
+            pocket.removeEventListener(walletChangeListener);
+            walletChangeListener.removeCallbacks();
+        }
 
         resolver.unregisterContentObserver(addressBookObserver);
 
@@ -540,7 +538,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
             }
         }
 
-        swipeContainer.setRefreshing(pocket.isLoading());
+        if (pocket != null) swipeContainer.setRefreshing(pocket.isLoading());
 
         if (adapter != null) adapter.clearLabelCache();
     }
@@ -556,9 +554,11 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
         protected void weakHandleMessage(BalanceFragment ref, Message msg) {
             switch (msg.what) {
                 case WALLET_CHANGED:
-                    ref.updateBalance();
-                    ref.checkEmptyPocketMessage();
-                    ref.updateConnectivityStatus();
+                    if (ref.pocket != null) {
+                        ref.updateBalance();
+                        ref.checkEmptyPocketMessage();
+                        ref.updateConnectivityStatus();
+                    }
                     break;
                 case UPDATE_VIEW:
                     ref.updateView();

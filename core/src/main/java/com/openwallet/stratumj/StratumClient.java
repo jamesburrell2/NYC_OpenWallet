@@ -19,6 +19,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +31,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 
 /**
@@ -129,9 +137,33 @@ public class StratumClient extends AbstractExecutionThreadService {
 
     protected Socket createSocket() throws IOException {
         ServerAddress address = serverAddress;
-        log.debug("Opening a socket to " + address.getHost() + ":" + address.getPort());
+        log.debug("Opening a socket to " + address.getHost() + ":" + address.getPort()
+                + " (TLS=" + address.isUseTls() + ")");
 
-        return new Socket(address.getHost(), address.getPort());
+        if (address.isUseTls()) {
+            try {
+                SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+                // Use a permissive trust manager for Electrum self-signed certificates
+                TrustManager[] trustAllCerts = new TrustManager[]{
+                        new X509TrustManager() {
+                            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                            public void checkClientTrusted(X509Certificate[] certs, String authType) { }
+                            public void checkServerTrusted(X509Certificate[] certs, String authType) { }
+                        }
+                };
+                sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+                SSLSocketFactory factory = sslContext.getSocketFactory();
+                SSLSocket sslSocket = (SSLSocket) factory.createSocket(
+                        address.getHost(), address.getPort());
+                sslSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
+                sslSocket.startHandshake();
+                return sslSocket;
+            } catch (NoSuchAlgorithmException | KeyManagementException e) {
+                throw new IOException("Failed to create TLS socket", e);
+            }
+        } else {
+            return new Socket(address.getHost(), address.getPort());
+        }
     }
 
     @Override

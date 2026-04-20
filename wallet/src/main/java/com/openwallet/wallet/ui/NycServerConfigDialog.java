@@ -4,10 +4,10 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.Fragment;
-import android.support.v7.app.AlertDialog;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.Fragment;
+import androidx.appcompat.app.AlertDialog;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  * before wallet pocket creation. The user can Save (persist host:port)
  * or Skip (wallet created without a server — banner shown in BalanceFragment).
  *
- * NOTE: Use android.support.v7.app.AlertDialog (not android.app.AlertDialog)
+ * NOTE: Use androidx.appcompat.app.AlertDialog (not android.app.AlertDialog)
  * to inherit the app's Material theme consistently across API levels.
  *
  * NOTE: setPositiveButton() always auto-dismisses. To keep the dialog open on

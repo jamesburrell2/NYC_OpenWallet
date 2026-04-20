@@ -29,6 +29,8 @@ import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 
+import android.text.TextUtils;
+
 import com.openwallet.core.coins.CoinID;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.FiatValue;
@@ -48,6 +50,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -99,10 +103,55 @@ public class ExchangeRatesProvider extends ContentProvider {
     private long cryptoToLocalLastUpdated = 0;
     private String lastCryptoCurrency = null;
 
-    private static final String BASE_URL = "https://ticker.coinomi.net/simple";
-    private static final String TO_LOCAL_URL = BASE_URL + "/to-local/%s";
-    private static final String TO_CRYPTO_URL = BASE_URL + "/to-crypto/%s";
+    private static final String COINGECKO_API_URL =
+            "https://api.coingecko.com/api/v3/simple/price";
+    /** Fiat currencies to fetch when a "to-local" query is made for a specific crypto. */
+    private static final String FIAT_CURRENCIES =
+            "usd,eur,gbp,jpy,cny,cad,aud,chf,inr,brl,rub,mxn,krw,sgd,hkd,nok,sek,dkk,nzd";
     private static final String OPENWALLET_SOURCE = "openwallet.xyz";
+
+    // CoinGecko coin ID map — symbol → gecko ID. Unknown coins are silently skipped.
+    private static final Map<String, String> SYMBOL_TO_GECKO_ID;
+    private static final Map<String, String> GECKO_ID_TO_SYMBOL;
+    static {
+        Map<String, String> s2g = new HashMap<>();
+        s2g.put("NYC",  "newyorkcoin");
+        s2g.put("BTC",  "bitcoin");
+        s2g.put("LTC",  "litecoin");
+        s2g.put("DOGE", "dogecoin");
+        s2g.put("ZEC",  "zcash");
+        s2g.put("DASH", "dash");
+        s2g.put("DGB",  "digibyte");
+        s2g.put("VTC",  "vertcoin");
+        s2g.put("XVG",  "verge");
+        s2g.put("NMC",  "namecoin");
+        s2g.put("FTC",  "feathercoin");
+        s2g.put("RDD",  "reddcoin");
+        s2g.put("BLK",  "blackcoin");
+        s2g.put("MONA", "monacoin");
+        s2g.put("PPC",  "peercoin");
+        s2g.put("POT",  "potcoin");
+        s2g.put("NEOS", "neoscoin");
+        s2g.put("OK",   "okcash");
+        s2g.put("NVC",  "novacoin");
+        s2g.put("AUR",  "auroracoin");
+        s2g.put("NSR",  "nushares");
+        s2g.put("NBT",  "nubits");
+        s2g.put("IXC",  "ixcoin");
+        s2g.put("NXT",  "nxt");
+        s2g.put("RBY",  "rubycoin");
+        s2g.put("DGC",  "digitalcoin");
+        s2g.put("VPN",  "vpncoin");
+        s2g.put("CDN",  "canadaecoin");
+        s2g.put("PKB",  "parkbyte");
+        s2g.put("CLAM", "clams");
+        s2g.put("JBS",  "jumbucks");
+        SYMBOL_TO_GECKO_ID = Collections.unmodifiableMap(s2g);
+
+        Map<String, String> g2s = new HashMap<>();
+        for (Map.Entry<String, String> e : s2g.entrySet()) g2s.put(e.getValue(), e.getKey());
+        GECKO_ID_TO_SYMBOL = Collections.unmodifiableMap(g2s);
+    }
 
     private static final Logger log = LoggerFactory.getLogger(ExchangeRatesProvider.class);
 
@@ -220,18 +269,7 @@ public class ExchangeRatesProvider extends ContentProvider {
         }
 
         if (!offline && (lastUpdated == 0 || now - lastUpdated > Constants.RATE_UPDATE_FREQ_MS)) {
-            URL url;
-            try {
-                if (isLocalToCrypto) {
-                    url = new URL(String.format(TO_CRYPTO_URL, symbol));
-                } else {
-                    url = new URL(String.format(TO_LOCAL_URL, symbol));
-                }
-            } catch (final MalformedURLException x) {
-                throw new RuntimeException(x); // Should not happen
-            }
-
-            JSONObject newExchangeRatesJson = requestExchangeRatesJson(url);
+            JSONObject newExchangeRatesJson = fetchCoinGeckoRates(symbol, isLocalToCrypto);
             Map<String, ExchangeRate> newExchangeRates =
                     parseExchangeRates(newExchangeRatesJson, symbol, isLocalToCrypto);
 
@@ -317,33 +355,76 @@ public class ExchangeRatesProvider extends ContentProvider {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Calls the CoinGecko /simple/price endpoint and transforms the response into the format
+     * expected by {@link #parseExchangeRates}:
+     *   to-crypto mode (symbol = fiat, e.g. "USD") → {"BTC": "45000.12", "LTC": "70.34", …}
+     *   to-local  mode (symbol = crypto, e.g. "BTC") → {"USD": "45000.12", "EUR": "38000.00", …}
+     */
     @Nullable
-    private JSONObject requestExchangeRatesJson(final URL url) {
-        // Return null if no connection
+    private JSONObject fetchCoinGeckoRates(String symbol, boolean isLocalToCrypto) {
         final NetworkInfo activeInfo = connManager.getActiveNetworkInfo();
         if (activeInfo == null || !activeInfo.isConnected()) return null;
 
         final long start = System.currentTimeMillis();
-
-        OkHttpClient client = NetworkUtils.getHttpClient(getContext().getApplicationContext());
-        Request request = new Request.Builder().url(url).build();
-
         try {
-            Response response = client.newCall(request).execute();
-            if (response.isSuccessful()) {
-                log.info("fetched exchange rates from {}, took {} ms", url,
-                        System.currentTimeMillis() - start);
-                return new JSONObject(response.body().string());
+            String urlStr;
+            if (isLocalToCrypto) {
+                String coinIds = TextUtils.join(",", SYMBOL_TO_GECKO_ID.values());
+                urlStr = COINGECKO_API_URL + "?ids=" + coinIds
+                        + "&vs_currencies=" + symbol.toLowerCase();
             } else {
-                log.warn("Error HTTP code '{}' when fetching exchange rates from {}",
-                        response.code(), url);
+                String coinId = SYMBOL_TO_GECKO_ID.get(symbol.toUpperCase());
+                if (coinId == null) return null;
+                urlStr = COINGECKO_API_URL + "?ids=" + coinId
+                        + "&vs_currencies=" + FIAT_CURRENCIES;
             }
-        } catch (IOException e) {
-            log.warn("Error '{}' when fetching exchange rates from {}", e.getMessage(), url);
-        } catch (JSONException e) {
-            log.warn("Could not parse exchange rates JSON: {}", e.getMessage());
+
+            OkHttpClient client = NetworkUtils.getHttpClient(getContext().getApplicationContext());
+            Request request = new Request.Builder()
+                    .url(new URL(urlStr))
+                    .header("Accept", "application/json")
+                    .build();
+
+            Response response = client.newCall(request).execute();
+            if (!response.isSuccessful()) {
+                log.warn("CoinGecko returned HTTP {}", response.code());
+                return null;
+            }
+
+            JSONObject raw = new JSONObject(response.body().string());
+            log.info("Fetched CoinGecko rates in {} ms", System.currentTimeMillis() - start);
+
+            // Transform {"bitcoin": {"usd": 45000.12}} → {"BTC": "45000.12"}
+            JSONObject transformed = new JSONObject();
+            if (isLocalToCrypto) {
+                String fiatKey = symbol.toLowerCase();
+                for (Iterator<String> it = raw.keys(); it.hasNext(); ) {
+                    String geckoId = it.next();
+                    String cryptoSymbol = GECKO_ID_TO_SYMBOL.get(geckoId);
+                    if (cryptoSymbol == null) continue;
+                    JSONObject prices = raw.optJSONObject(geckoId);
+                    if (prices == null) continue;
+                    double price = prices.optDouble(fiatKey, -1);
+                    if (price > 0) transformed.put(cryptoSymbol, String.valueOf(price));
+                }
+            } else {
+                String coinId = SYMBOL_TO_GECKO_ID.get(symbol.toUpperCase());
+                JSONObject prices = coinId != null ? raw.optJSONObject(coinId) : null;
+                if (prices != null) {
+                    for (Iterator<String> it = prices.keys(); it.hasNext(); ) {
+                        String fiatCode = it.next();
+                        double price = prices.optDouble(fiatCode, -1);
+                        if (price > 0) transformed.put(fiatCode.toUpperCase(), String.valueOf(price));
+                    }
+                }
+            }
+            return transformed.length() > 0 ? transformed : null;
+
+        } catch (Exception e) {
+            log.warn("Error fetching CoinGecko rates: {}", e.getMessage());
+            return null;
         }
-        return null;
     }
 
     private Map<String, ExchangeRate> parseExchangeRates(JSONObject json, String fromSymbol, boolean isLocalToCrypto) {

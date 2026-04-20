@@ -4,10 +4,18 @@ import com.openwallet.core.CoreUtils;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.coins.families.BitFamily;
+import com.openwallet.core.coins.families.CardanoFamily;
+import com.openwallet.core.coins.families.ChiaFamily;
+import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.NxtFamily;
+import com.openwallet.core.coins.families.SolanaFamily;
 import com.openwallet.core.exceptions.UnsupportedCoinTypeException;
 import com.openwallet.core.protos.Protos;
+import com.openwallet.core.wallet.families.cardano.CardanoFamilyWallet;
+import com.openwallet.core.wallet.families.chia.ChiaFamilyWallet;
+import com.openwallet.core.wallet.families.evm.EvmFamilyWallet;
 import com.openwallet.core.wallet.families.nxt.NxtFamilyWallet;
+import com.openwallet.core.wallet.families.solana.SolanaFamilyWallet;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -276,26 +284,73 @@ final public class Wallet {
         }
         // TODO ///////////////
 
-        DeterministicHierarchy hierarchy;
-        if (isEncrypted()) {
-            hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
-        } else {
-            hierarchy= new DeterministicHierarchy(masterKey);
-        }
-        int newIndex = getLastAccountIndex(coinType) + 1;
-        DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
-
         WalletAccount newPocket;
 
         if (coinType instanceof BitFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
             newPocket = new WalletPocketHD(rootKey, coinType, getKeyCrypter(), key);
         } else if (coinType instanceof NxtFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
             newPocket = new NxtFamilyWallet(rootKey, coinType, getKeyCrypter(), key);
+        } else if (coinType instanceof EvmFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
+            newPocket = new EvmFamilyWallet(coinType, coinType.getId() + ":" + newIndex, rootKey);
+        } else if (coinType instanceof SolanaFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
+            newPocket = new SolanaFamilyWallet(coinType, coinType.getId() + ":" + newIndex, rootKey);
+        } else if (coinType instanceof CardanoFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
+            newPocket = new CardanoFamilyWallet(coinType, coinType.getId() + ":" + newIndex, rootKey);
+        } else if (coinType instanceof ChiaFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
+            newPocket = new ChiaFamilyWallet(coinType, coinType.getId() + ":" + newIndex, rootKey);
         } else {
             throw new UnsupportedCoinTypeException(coinType);
         }
 
-        if (isEncrypted() && !newPocket.isEncrypted()) {
+        if (isEncrypted() && newPocket.isEncryptable() && !newPocket.isEncrypted()) {
             newPocket.encrypt(getKeyCrypter(), key);
         }
         addAccount(newPocket);

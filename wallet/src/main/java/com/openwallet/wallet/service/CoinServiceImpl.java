@@ -13,7 +13,7 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import android.text.format.DateUtils;
 
-import com.openwallet.core.coins.NewYorkCoinMain;
+import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.network.CoinAddress;
 import com.openwallet.core.network.ConnectivityHelper;
 import com.openwallet.core.network.ServerClients;
@@ -243,19 +243,27 @@ public class CoinServiceImpl extends Service implements CoinService {
         if (application.getTxCachePath() != null) {
             newClients.setCacheDir(application.getTxCachePath(), Constants.TX_CACHE_SIZE);
         }
-        // NYC: ElectrumX server is configured at runtime — not in DEFAULT_COINS_SERVERS.
-        // getServerClients() is called at startup and on every reconnection, so this
-        // injection covers all connection paths.
-        String nycServer = application.getConfiguration().getNycElectrumServer();
-        if (nycServer != null && !nycServer.isEmpty()) {
-            int lastColon = nycServer.lastIndexOf(':');
-            String host = nycServer.substring(0, lastColon);
-            int port = Integer.parseInt(nycServer.substring(lastColon + 1));
-            newClients.addCoinAddress(new CoinAddress(
-                NewYorkCoinMain.get(),
-                new ServerAddress(host, port),
-                new ServerAddress(host, port)
-            ));
+        // Inject user-configured ElectrumX server overrides for all supported coins.
+        // This covers NYC (not in DEFAULT_COINS_SERVERS) and any coin where the user has
+        // set a custom server in Settings → Coin Servers.  addCoinAddress() overwrites any
+        // existing DEFAULT_COINS_SERVERS entry for the same coin type.
+        Configuration config = application.getConfiguration();
+        for (CoinType type : Constants.SUPPORTED_COINS) {
+            String userServer = config.getCoinElectrumServer(type);
+            if (userServer != null && !userServer.isEmpty()) {
+                int lastColon = userServer.lastIndexOf(':');
+                if (lastColon > 0) {
+                    String host = userServer.substring(0, lastColon);
+                    int port = Integer.parseInt(userServer.substring(lastColon + 1));
+                    // Standard Electrum TLS ports: 50002, 60002
+                    boolean useTls = (port == 50002 || port == 60002);
+                    newClients.addCoinAddress(new CoinAddress(
+                        type,
+                        new ServerAddress(host, port, useTls),
+                        new ServerAddress(host, port, useTls)
+                    ));
+                }
+            }
         }
         return newClients;
     }
@@ -326,8 +334,8 @@ public class CoinServiceImpl extends Service implements CoinService {
         intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
         intentFilter.addAction(Intent.ACTION_DEVICE_STORAGE_LOW);
         intentFilter.addAction(Intent.ACTION_DEVICE_STORAGE_OK);
-        registerReceiver(connectivityReceiver, intentFilter);
-        registerReceiver(tickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK));
+        registerReceiver(connectivityReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+        registerReceiver(tickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK), Context.RECEIVER_NOT_EXPORTED);
     }
 
     private ConnectivityHelper getConnectivityHelper(final ConnectivityManager manager) {

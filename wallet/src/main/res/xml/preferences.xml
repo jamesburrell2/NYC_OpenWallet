@@ -11,6 +11,11 @@
             android:targetClass="com.openwallet.wallet.ui.FeesSettingsActivity" />
     </Preference>
 
+    <Preference android:title="@string/title_activity_coin_servers" >
+        <intent android:targetPackage="@string/app_package"
+            android:targetClass="com.openwallet.wallet.ui.ServerSettingsActivity" />
+    </Preference>
+
     <Preference android:title="@string/title_activity_show_seed" >
         <intent android:targetPackage="@string/app_package"
             android:targetClass="com.openwallet.wallet.ui.ShowSeedActivity" />

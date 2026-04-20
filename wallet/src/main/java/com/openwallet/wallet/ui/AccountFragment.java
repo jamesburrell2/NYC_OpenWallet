@@ -3,11 +3,11 @@ package com.openwallet.wallet.ui;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Message;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentPagerAdapter;
-import android.support.v4.view.ViewPager;
-import android.support.v7.view.ActionMode;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentPagerAdapter;
+import androidx.viewpager.widget.ViewPager;
+import androidx.appcompat.view.ActionMode;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -84,8 +84,10 @@ public class AccountFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
 
-        // TODO handle null account
         account = application.getAccount(getArguments().getString(Constants.ARG_ACCOUNT_ID));
+        if (account == null) {
+            log.warn("Account not found for id: {}", getArguments().getString(Constants.ARG_ACCOUNT_ID));
+        }
     }
 
     @Override
@@ -123,6 +125,9 @@ public class AccountFragment extends Fragment {
             @Override public void onPageScrollStateChanged(int state) { }
         });
 
+        if (account == null) {
+            Toast.makeText(getActivity(), R.string.no_such_pocket_error, Toast.LENGTH_LONG).show();
+        }
         viewPager.setAdapter(
                 new AppSectionsPagerAdapter(getActivity(), getChildFragmentManager(), account));
 
@@ -260,6 +265,7 @@ public class AccountFragment extends Fragment {
 
     @SuppressWarnings({ "unchecked"})
     private static <T extends Fragment> T createFragment(WalletAccount account, int item) {
+        if (account == null) throw new IllegalStateException("Cannot create fragment: account is null");
         String accountId = account.getId();
         switch (item) {
             case RECEIVE:
@@ -323,6 +329,7 @@ public class AccountFragment extends Fragment {
 
         @Override
         public Fragment getItem(int i) {
+            if (account == null) return new Fragment(); // placeholder when account unavailable
             switch (i) {
                 case RECEIVE:
                     if (request == null) request = createFragment(account, i);

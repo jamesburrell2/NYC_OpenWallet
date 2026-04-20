@@ -6,7 +6,7 @@ public class NewYorkCoinMain extends BitFamily {
     private NewYorkCoinMain() {
         id = "newyorkcoin.main";
 
-        addressHeader = 52;           // 0x34 → N... prefix
+        addressHeader = 60;           // 0x3C → R... prefix
         p2shHeader = 22;              // 0x16
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
         spendableCoinbaseDepth = 100;
