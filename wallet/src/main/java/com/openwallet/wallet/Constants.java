@@ -104,8 +104,8 @@ public class Constants {
     // TODO move to resource files
     public static final List<CoinAddress> DEFAULT_COINS_SERVERS = ImmutableList.of(
             new CoinAddress(NewYorkCoinMain.get(),
-                    new ServerAddress("electrum.newyorkcoin.online", 50002, true),
-                    new ServerAddress("electrum.newyorkcoin.online", 50002, true)),
+                    new ServerAddress("electrum.paywith.nyc", 50002, true),
+                    new ServerAddress("electrum.paywith.nyc", 50002, true)),
             new CoinAddress(BitcoinMain.get(),      new ServerAddress("electrum.blockstream.info", 50002, true),
                                                     new ServerAddress("electrum.bitaroo.net", 50002, true)),
             new CoinAddress(BitcoinTest.get(),      new ServerAddress("electrum.blockstream.info", 60002, true),
