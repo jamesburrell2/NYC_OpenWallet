@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">GOTH.AM</string>
+    <string name="app_name" translatable="false">OpenWallet NYC</string>
     <string name="app_package" translatable="false">com.newyorkcoin.openwallet</string>
     <string name="openwallet_website" translatable="false">https://openwallet.xyz</string>
     <string name="almost_equal_to" translatable="false">≈</string>
@@ -202,7 +202,7 @@
     </plurals>
     <!-- About Activity -->
     <string name="title_activity_about">About OpenWallet</string>
-    <string name="app_name_long">GOTH.AM Crypto Wallet</string>
+    <string name="app_name_long">OpenWallet NYC</string>
     <string name="about_licence">An open source project\nhttps://gitlab.com/openwallet/openwallet-android</string>
     <string name="about_credits_nubits">Server infrastructure powered by your donations</string>
     <string name="about_credits_translations">Translations provided by:</string>
