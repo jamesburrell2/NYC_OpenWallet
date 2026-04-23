@@ -3,6 +3,7 @@ package com.openwallet.wallet.ui.dialogs;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
 import androidx.fragment.app.DialogFragment;
 import android.view.View;
@@ -15,6 +16,8 @@ import com.openwallet.wallet.Configuration;
 import com.openwallet.wallet.Constants;
 import com.openwallet.wallet.R;
 import com.openwallet.wallet.WalletApplication;
+import com.openwallet.wallet.service.CoinService;
+import com.openwallet.wallet.service.CoinServiceImpl;
 import com.openwallet.wallet.ui.DialogBuilder;
 
 import butterknife.Bind;
@@ -73,9 +76,11 @@ public class EditServerDialog extends DialogFragment {
                     case DialogInterface.BUTTON_POSITIVE:
                         String input = serverAddressInput.getText().toString().trim();
                         configuration.setCoinElectrumServer(type, input.isEmpty() ? null : input);
+                        restartCoinService();
                         break;
                     case DialogInterface.BUTTON_NEUTRAL:
                         configuration.setCoinElectrumServer(type, null);
+                        restartCoinService();
                         break;
                 }
             }
@@ -85,5 +90,15 @@ public class EditServerDialog extends DialogFragment {
         builder.setPositiveButton(R.string.button_ok, onClickListener);
 
         return builder.create();
+    }
+
+    /** Drops the current ElectrumX connection so CoinServiceImpl picks up the new server. */
+    private void restartCoinService() {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.startService(new Intent(CoinService.ACTION_CLEAR_CONNECTIONS,
+                null, activity, CoinServiceImpl.class));
+        activity.startService(new Intent(CoinService.ACTION_CONNECT_ALL_COIN,
+                null, activity, CoinServiceImpl.class));
     }
 }

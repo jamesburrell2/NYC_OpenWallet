@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -56,7 +57,7 @@ public class ServerClient implements BitBlockchainConnection {
     private static final Logger log = LoggerFactory.getLogger(ServerClient.class);
 
     private static final ScheduledThreadPoolExecutor connectionExec;
-    private static final String CLIENT_PROTOCOL = "0.9";
+    private static final String CLIENT_PROTOCOL = "1.4";
 
     static {
         connectionExec = new ScheduledThreadPoolExecutor(1);
@@ -83,6 +84,9 @@ public class ServerClient implements BitBlockchainConnection {
 
     // TODO, only one is supported at the moment. Change when accounts are supported.
     private transient CopyOnWriteArrayList<ListenerRegistration<ConnectionEventListener>> eventListeners;
+
+    // Maps scripthash (hex, little-endian) → address for ElectrumX 1.4+ scripthash API
+    private final ConcurrentHashMap<String, AbstractAddress> scripthashToAddress = new ConcurrentHashMap<>();
 
     private void reschedule(Runnable r, long delay, TimeUnit unit) {
         connectionExec.remove(r);
@@ -127,10 +131,25 @@ public class ServerClient implements BitBlockchainConnection {
             // Check if connection is up as this event is fired even if there is no connection
             if (isActivelyConnected()) {
                 log.info("{} client connected to {}", type.getName(), lastServerAddress);
-                broadcastOnConnection();
-
-                // Test that the connection is stable
-                reschedule(connectionCheckTask, CONNECTION_STABILIZATION, TimeUnit.SECONDS);
+                // ElectrumX 1.4+ requires server.version before any other call
+                final CallMessage versionMsg = new CallMessage("server.version",
+                        ImmutableList.of("openwallet-android", CLIENT_PROTOCOL));
+                final ListenableFuture<ResultMessage> versionReply = stratumClient.call(versionMsg);
+                Futures.addCallback(versionReply, new FutureCallback<ResultMessage>() {
+                    @Override
+                    public void onSuccess(@Nullable ResultMessage result) {
+                        log.info("{} server.version handshake OK", type.getName());
+                        broadcastOnConnection();
+                        reschedule(connectionCheckTask, CONNECTION_STABILIZATION, TimeUnit.SECONDS);
+                    }
+                    @Override
+                    public void onFailure(Throwable t) {
+                        log.warn("{} server.version failed ({}); proceeding anyway",
+                                type.getName(), t.getMessage());
+                        broadcastOnConnection();
+                        reschedule(connectionCheckTask, CONNECTION_STABILIZATION, TimeUnit.SECONDS);
+                    }
+                }, Threading.USER_THREAD);
             }
         }
 
@@ -360,46 +379,89 @@ public class ServerClient implements BitBlockchainConnection {
         }, Threading.USER_THREAD);
     }
 
+    /**
+     * Computes the ElectrumX scripthash for an address.
+     * Scripthash = SHA256(scriptPubKey) with bytes reversed (little-endian), hex-encoded.
+     */
+    private static String toScripthash(AbstractAddress addr) {
+        BitAddress address = (BitAddress) addr;
+        byte[] hash160 = address.getHash160();
+        byte[] scriptPubKey;
+        if (address.isP2SHAddress()) {
+            // P2SH: OP_HASH160 <hash160> OP_EQUAL  (23 bytes)
+            scriptPubKey = new byte[23];
+            scriptPubKey[0] = (byte) 0xa9;
+            scriptPubKey[1] = (byte) 0x14;
+            System.arraycopy(hash160, 0, scriptPubKey, 2, 20);
+            scriptPubKey[22] = (byte) 0x87;
+        } else {
+            // P2PKH: OP_DUP OP_HASH160 <hash160> OP_EQUALVERIFY OP_CHECKSIG  (25 bytes)
+            scriptPubKey = new byte[25];
+            scriptPubKey[0] = (byte) 0x76;
+            scriptPubKey[1] = (byte) 0xa9;
+            scriptPubKey[2] = (byte) 0x14;
+            System.arraycopy(hash160, 0, scriptPubKey, 3, 20);
+            scriptPubKey[23] = (byte) 0x88;
+            scriptPubKey[24] = (byte) 0xac;
+        }
+        byte[] sha256 = Sha256Hash.create(scriptPubKey).getBytes();
+        // Reverse bytes for ElectrumX little-endian convention
+        byte[] reversed = new byte[sha256.length];
+        for (int i = 0; i < sha256.length; i++) {
+            reversed[i] = sha256[sha256.length - 1 - i];
+        }
+        return Utils.HEX.encode(reversed);
+    }
+
     @Override
     public void subscribeToAddresses(List<AbstractAddress> addresses, final TransactionEventListener<BitTransaction> listener) {
         checkNotNull(stratumClient);
 
-        final CallMessage callMessage = new CallMessage("blockchain.address.subscribe", (List)null);
-
-        // TODO use TransactionEventListener directly because the current solution leaks memory
-        StratumClient.SubscribeResultHandler addressHandler = new StratumClient.SubscribeResultHandler() {
-            @Override
-            public void handle(CallMessage message) {
-                try {
-                    AbstractAddress address = BitAddress.from(type, message.getParams().getString(0));
-                    AddressStatus status;
-                    if (message.getParams().isNull(1)) {
-                        status = new AddressStatus(address, null);
-                    }
-                    else {
-                        status = new AddressStatus(address, message.getParams().getString(1));
-                    }
-                    listener.onAddressStatusUpdate(status);
-                } catch (AddressMalformedException e) {
-                    log.error("Address subscribe sent a malformed address", e);
-                } catch (JSONException e) {
-                    log.error("Unexpected JSON format", e);
-                }
-            }
-        };
-
         for (final AbstractAddress address : addresses) {
-            log.debug("Going to subscribe to {}", address);
-            callMessage.setParam(address.toString());
+            final String scripthash;
+            try {
+                scripthash = toScripthash(address);
+            } catch (Exception e) {
+                log.error("Could not compute scripthash for {}", address, e);
+                continue;
+            }
+            scripthashToAddress.put(scripthash, address);
 
-            ListenableFuture<ResultMessage> reply = stratumClient.subscribe(callMessage, addressHandler);
+            // TODO use TransactionEventListener directly because the current solution leaks memory
+            StratumClient.SubscribeResultHandler scripthashHandler = new StratumClient.SubscribeResultHandler() {
+                @Override
+                public void handle(CallMessage message) {
+                    try {
+                        String notifiedHash = message.getParams().getString(0);
+                        AbstractAddress notifiedAddress = scripthashToAddress.get(notifiedHash);
+                        if (notifiedAddress == null) {
+                            log.warn("Notification for unknown scripthash: {}", notifiedHash);
+                            return;
+                        }
+                        AddressStatus status;
+                        if (message.getParams().isNull(1)) {
+                            status = new AddressStatus(notifiedAddress, null);
+                        } else {
+                            status = new AddressStatus(notifiedAddress, message.getParams().getString(1));
+                        }
+                        listener.onAddressStatusUpdate(status);
+                    } catch (JSONException e) {
+                        log.error("Unexpected JSON format", e);
+                    }
+                }
+            };
+
+            log.debug("Going to subscribe to {} (scripthash {})", address, scripthash);
+            CallMessage callMessage = new CallMessage("blockchain.scripthash.subscribe",
+                    ImmutableList.of(scripthash));
+
+            ListenableFuture<ResultMessage> reply = stratumClient.subscribe(callMessage, scripthashHandler);
 
             Futures.addCallback(reply, new FutureCallback<ResultMessage>() {
-
                 @Override
                 public void onSuccess(ResultMessage result) {
-                    AddressStatus status = null;
                     try {
+                        AddressStatus status;
                         if (result.getResult().isNull(0)) {
                             status = new AddressStatus(address, null);
                         } else {
@@ -414,9 +476,9 @@ public class ServerClient implements BitBlockchainConnection {
                 @Override
                 public void onFailure(Throwable t) {
                     if (t instanceof CancellationException) {
-                        log.info("Canceling {} call", callMessage.getMethod());
+                        log.info("Canceling scripthash.subscribe call for {}", address);
                     } else {
-                        log.error("Could not get reply for {} address subscribe {}: ",
+                        log.error("Could not get reply for {} scripthash subscribe {}: ",
                                 type.getName(), address, t.getMessage());
                     }
                 }
@@ -429,8 +491,8 @@ public class ServerClient implements BitBlockchainConnection {
                              final BitTransactionEventListener listener) {
         checkNotNull(stratumClient);
 
-        CallMessage message = new CallMessage("blockchain.address.listunspent",
-                Arrays.asList(status.getAddress().toString()));
+        CallMessage message = new CallMessage("blockchain.scripthash.listunspent",
+                Arrays.asList(toScripthash(status.getAddress())));
         final ListenableFuture<ResultMessage> result = stratumClient.call(message);
 
         Futures.addCallback(result, new FutureCallback<ResultMessage>() {
@@ -452,7 +514,7 @@ public class ServerClient implements BitBlockchainConnection {
 
             @Override
             public void onFailure(Throwable t) {
-                log.error("Could not get reply for blockchain.address.listunspent", t);
+                log.error("Could not get reply for blockchain.scripthash.listunspent", t);
             }
         }, Threading.USER_THREAD);
     }
@@ -462,8 +524,8 @@ public class ServerClient implements BitBlockchainConnection {
                              final TransactionEventListener<BitTransaction> listener) {
         checkNotNull(stratumClient);
 
-        final CallMessage message = new CallMessage("blockchain.address.get_history",
-                Arrays.asList(status.getAddress().toString()));
+        final CallMessage message = new CallMessage("blockchain.scripthash.get_history",
+                Arrays.asList(toScripthash(status.getAddress())));
         final ListenableFuture<ResultMessage> result = stratumClient.call(message);
 
         Futures.addCallback(result, new FutureCallback<ResultMessage>() {
@@ -488,7 +550,7 @@ public class ServerClient implements BitBlockchainConnection {
                 if (t instanceof CancellationException) {
                     log.debug("Canceling {} call", message.getMethod());
                 } else {
-                    log.error("Could not get reply for blockchain.address.get_history", t);
+                    log.error("Could not get reply for blockchain.scripthash.get_history", t);
                 }
             }
         }, Threading.USER_THREAD);
