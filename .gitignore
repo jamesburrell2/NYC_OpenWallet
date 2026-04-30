@@ -6,6 +6,14 @@
 /build
 .directory
 
-# Signing keystores
+# Signing keystores and credentials
 *.keystore
 *.jks
+keystore.properties
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
+
+# Build output logs
+build_output.txt

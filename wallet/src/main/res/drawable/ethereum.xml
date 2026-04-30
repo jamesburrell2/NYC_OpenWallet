@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ethereum (ETH) placeholder icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <path
+        android:fillColor="#627EEA"
+        android:pathData="M32,2a30,30 0,1 0,0.001 0Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,10 L20,33 L32,40 L44,33 Z"/>
+    <path
+        android:fillColor="#C0C8E8"
+        android:pathData="M32,40 L20,33 L32,54 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,40 L44,33 L32,54 Z"/>
+</vector>

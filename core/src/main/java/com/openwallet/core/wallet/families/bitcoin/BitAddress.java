@@ -62,7 +62,7 @@ public class BitAddress extends Address implements AbstractAddress {
     public static BitAddress from(CoinType type, Script script) throws AddressMalformedException {
         try {
             return new BitAddress(script.getToAddress(type));
-        } catch (WrongNetworkException e) {
+        } catch (WrongNetworkException | org.bitcoinj.core.ScriptException e) {
             throw new AddressMalformedException(e);
         }
     }

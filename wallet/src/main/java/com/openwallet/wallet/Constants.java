@@ -12,14 +12,12 @@ import com.openwallet.core.coins.DashMain;
 import com.openwallet.core.coins.DigibyteMain;
 import com.openwallet.core.coins.DogecoinMain;
 import com.openwallet.core.coins.DogecoinTest;
-import com.openwallet.core.coins.EthereumMain;
 import com.openwallet.core.coins.FeathercoinMain;
 import com.openwallet.core.coins.LitecoinMain;
 import com.openwallet.core.coins.LitecoinTest;
 import com.openwallet.core.coins.NewYorkCoinMain;
 import com.openwallet.core.coins.PotcoinMain;
 import com.openwallet.core.coins.ReddcoinMain;
-import com.openwallet.core.coins.SolanaMain;
 import com.openwallet.core.coins.VertcoinMain;
 import com.openwallet.core.coins.ZcashMain;
 import com.openwallet.core.network.CoinAddress;
@@ -153,10 +151,9 @@ public class Constants {
         COINS_ICONS.put(CoinID.VERTCOIN_MAIN.getCoinType(), R.drawable.vertcoin);
         COINS_ICONS.put(CoinID.POTCOIN_MAIN.getCoinType(), R.drawable.potcoin);
         COINS_ICONS.put(CoinID.ZCASH_MAIN.getCoinType(), R.drawable.zcash);
-
         COINS_BLOCK_EXPLORERS = new HashMap<CoinType, String>();
         COINS_BLOCK_EXPLORERS.put(CoinID.NEWYORKCOIN_MAIN.getCoinType(),
-                "https://explorer.newyorkcoin.net/tx/%s");
+                "https://chainz.cryptoid.info/nyc/tx.dws?%s.htm");
         COINS_BLOCK_EXPLORERS.put(CoinID.BITCOIN_MAIN.getCoinType(), "https://blockchain.info/tx/%s");
         COINS_BLOCK_EXPLORERS.put(CoinID.BITCOIN_TEST.getCoinType(), "https://chain.so/tx/BTCTEST/%s");
         COINS_BLOCK_EXPLORERS.put(CoinID.LITECOIN_MAIN.getCoinType(), "http://ltc.blockr.io/tx/info/%s");
@@ -193,11 +190,6 @@ public class Constants {
             PotcoinMain.get(),
             ReddcoinMain.get(),
             VertcoinMain.get(),
-            // TODO: Re-enable when fully implemented (icons, serialization, encryption)
-            // EthereumMain.get(),
-            // SolanaMain.get(),
-            // CardanoMain.get(),
-            // ChiaMain.get(),
             BitcoinTest.get(),
             LitecoinTest.get(),
             DogecoinTest.get()

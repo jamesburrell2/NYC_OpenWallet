@@ -17,6 +17,9 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -27,19 +30,23 @@ import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.FiatType;
 import com.openwallet.core.coins.Value;
-import com.openwallet.core.coins.families.BitFamily;
 import com.openwallet.core.coins.families.NxtFamily;
-import com.openwallet.core.exceptions.UnsupportedCoinTypeException;
 import com.openwallet.core.uri.CoinURI;
 import com.openwallet.core.util.ExchangeRate;
 import com.openwallet.core.util.GenericUtils;
 import com.openwallet.core.wallet.AbstractAddress;
+import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
 import com.openwallet.core.wallet.WalletPocketHD;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.DeterministicKey;
+import org.bitcoinj.crypto.HDUtils;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import com.openwallet.wallet.AddressBookProvider;
 import com.openwallet.wallet.Configuration;
@@ -97,7 +104,11 @@ public class AddressRequestFragment extends WalletFragment {
     @Bind(R.id.qr_code) ImageView qrView;
     @Bind(R.id.address_type_radio_group) RadioGroup addressTypeRadioGroup;
     @Bind(R.id.derivation_path_view)     TextView derivationPathView;
+    @Bind(R.id.custom_path_toggle)       TextView customPathToggle;
+    @Bind(R.id.custom_path_row)          View customPathRow;
+    @Bind(R.id.custom_path_input)        EditText customPathInput;
     private AddressType selectedAddressType = AddressType.NATIVE_SEGWIT;
+    private WalletApplication walletApplication;
     String lastQrContent;
     CurrencyCalculatorLink amountCalculatorLink;
     ContentResolver resolver;
@@ -230,6 +241,25 @@ public class AddressRequestFragment extends WalletFragment {
                     updateView();
                 }
             });
+
+            // Custom path toggle
+            customPathToggle.setVisibility(View.VISIBLE);
+            customPathToggle.setOnClickListener(v -> {
+                boolean expanded = customPathRow.getVisibility() == View.VISIBLE;
+                customPathRow.setVisibility(expanded ? View.GONE : View.VISIBLE);
+                customPathToggle.setText(expanded
+                        ? getString(R.string.address_type_custom_path_expand)
+                        : getString(R.string.address_type_custom_path_collapse));
+                if (expanded) {
+                    customPathInput.setText("");
+                    updateView();
+                }
+            });
+            customPathInput.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void afterTextChanged(Editable s) { updateView(); }
+            });
         }
 
         AmountEditView sendLocalAmountView = ButterKnife.findById(view, R.id.request_local_amount);
@@ -329,7 +359,8 @@ public class AddressRequestFragment extends WalletFragment {
     public void onAttach(final Context  context) {
         super.onAttach(context);
         this.resolver = context.getContentResolver();
-        this.config = ((WalletApplication) context.getApplicationContext()).getConfiguration();
+        walletApplication = (WalletApplication) context.getApplicationContext();
+        this.config = walletApplication.getConfiguration();
     }
 
     @Override
@@ -361,30 +392,88 @@ public class AddressRequestFragment extends WalletFragment {
     public void updateView() {
         if (isRemoving() || isDetached()) return;
         receiveAddress = null;
+        DeterministicKey displayKey = null;
+
         if (showAddress != null) {
             receiveAddress = showAddress;
-            // Hide tab strip and derivation path when showing a historical address
+            // Hide tab strip and custom path when showing a historical address
             if (type.getSupportedAddressTypes().size() > 1) {
                 addressTypeRadioGroup.setVisibility(View.GONE);
+                customPathToggle.setVisibility(View.GONE);
+                customPathRow.setVisibility(View.GONE);
                 derivationPathView.setVisibility(View.GONE);
             }
         } else {
             AbstractAddress legacyAddr = account.getReceiveAddress();
-            if (selectedAddressType == AddressType.LEGACY || type.getSupportedAddressTypes().size() == 1) {
-                receiveAddress = legacyAddr;
-            } else {
-                try {
-                    byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
-                    com.openwallet.core.wallet.WalletPocketHD pocketHD =
-                            (com.openwallet.core.wallet.WalletPocketHD) account;
-                    org.bitcoinj.core.ECKey key = pocketHD.findKeyFromPubHash(hash160);
-                    if (key != null) {
-                        receiveAddress = type.addressFromKey(key, selectedAddressType);
-                    } else {
-                        receiveAddress = legacyAddr;
+            String customPathStr = (customPathInput != null)
+                    ? customPathInput.getText().toString().trim() : "";
+            boolean useCustomPath = !customPathStr.isEmpty();
+
+            if (useCustomPath) {
+                // Custom path: parse, derive, infer address type
+                List<ChildNumber> path = parseUserPath(customPathStr);
+                if (path != null && walletApplication != null) {
+                    Wallet wallet = walletApplication.getWallet();
+                    if (wallet != null) {
+                        displayKey = wallet.deriveKeyAtFullPath(path);
+                        if (displayKey != null) {
+                            AddressType addrType = inferAddressType(path);
+                            if (!type.getSupportedAddressTypes().contains(addrType)) {
+                                addrType = AddressType.LEGACY;
+                            }
+                            try {
+                                receiveAddress = type.addressFromKey(displayKey, addrType);
+                            } catch (Exception e) {
+                                displayKey = null;
+                            }
+                        }
                     }
-                } catch (Exception e) {
-                    receiveAddress = legacyAddr;
+                }
+                if (receiveAddress == null) receiveAddress = legacyAddr;
+
+            } else if (selectedAddressType == AddressType.LEGACY
+                    || type.getSupportedAddressTypes().size() == 1) {
+                receiveAddress = legacyAddr;
+                // Capture the DK for path display
+                if (type.getSupportedAddressTypes().size() > 1 && account instanceof WalletPocketHD) {
+                    try {
+                        byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
+                        ECKey rawKey = ((WalletPocketHD) account).findKeyFromPubHash(hash160);
+                        if (rawKey instanceof DeterministicKey) displayKey = (DeterministicKey) rawKey;
+                    } catch (Exception ignored) {}
+                }
+
+            } else {
+                // NATIVE_SEGWIT (BIP84) or COMPATIBLE (BIP49): derive from proper purpose path
+                receiveAddress = legacyAddr; // default fallback
+                if (account instanceof WalletPocketHD && walletApplication != null) {
+                    WalletPocketHD pocketHD = (WalletPocketHD) account;
+                    Wallet wallet = walletApplication.getWallet();
+                    if (wallet != null) {
+                        int accountIndex = pocketHD.getAccountIndex();
+                        List<ChildNumber> accountPath = (selectedAddressType == AddressType.NATIVE_SEGWIT)
+                                ? type.getBip84Path(accountIndex)
+                                : type.getBip49Path(accountIndex);
+                        List<ChildNumber> fullPath = new ArrayList<>(accountPath);
+                        fullPath.add(new ChildNumber(0, false)); // external chain
+                        fullPath.add(new ChildNumber(0, false)); // address index 0
+                        displayKey = wallet.deriveKeyAtFullPath(fullPath);
+                        if (displayKey != null) {
+                            try {
+                                receiveAddress = type.addressFromKey(displayKey, selectedAddressType);
+                            } catch (Exception e) {
+                                displayKey = null;
+                            }
+                        }
+                    }
+                    if (displayKey == null) {
+                        // Fallback for encrypted wallets: re-encode the BIP44 key
+                        try {
+                            byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
+                            ECKey key = ((WalletPocketHD) account).findKeyFromPubHash(hash160);
+                            if (key != null) receiveAddress = type.addressFromKey(key, selectedAddressType);
+                        } catch (Exception ignored) {}
+                    }
                 }
             }
         }
@@ -396,44 +485,70 @@ public class AddressRequestFragment extends WalletFragment {
             previousAddressesLink.setVisibility(View.GONE);
         }
 
-        // TODO, add message
-
         updateLabel();
-
         updateQrCode(getUri());
 
         // Populate derivation path for multi-type coins
-        if (type.getSupportedAddressTypes().size() > 1 && derivationPathView != null) {
-            try {
-                AbstractAddress legacyAddr = account.getReceiveAddress();
-                byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
-                WalletPocketHD pocketHD = (WalletPocketHD) account;
-                org.bitcoinj.core.ECKey rawKey = pocketHD.findKeyFromPubHash(hash160);
-                if (rawKey instanceof DeterministicKey) {
-                    DeterministicKey dk = (DeterministicKey) rawKey;
-                    StringBuilder path = new StringBuilder("M");
-                    for (ChildNumber child : dk.getPath()) {
-                        path.append('/').append(child.toString());
-                    }
-                    derivationPathView.setText(path.toString());
+        if (type.getSupportedAddressTypes().size() > 1 && derivationPathView != null && showAddress == null) {
+            String customPathStr = (customPathInput != null)
+                    ? customPathInput.getText().toString().trim() : "";
+            if (!customPathStr.isEmpty()) {
+                List<ChildNumber> path = parseUserPath(customPathStr);
+                if (path != null) {
+                    StringBuilder sb = new StringBuilder("M");
+                    for (ChildNumber c : path) sb.append('/').append(c.toString());
+                    derivationPathView.setText(sb.toString());
                     derivationPathView.setVisibility(View.VISIBLE);
                 } else {
-                    derivationPathView.setVisibility(View.GONE);
+                    derivationPathView.setText("Invalid path");
+                    derivationPathView.setVisibility(View.VISIBLE);
                 }
-            } catch (Exception e) {
+            } else if (displayKey != null) {
+                StringBuilder path = new StringBuilder("M");
+                for (ChildNumber child : displayKey.getPath()) {
+                    path.append('/').append(child.toString());
+                }
+                derivationPathView.setText(path.toString());
+                derivationPathView.setVisibility(View.VISIBLE);
+            } else {
                 derivationPathView.setVisibility(View.GONE);
             }
         }
     }
 
+    /** Parse a user-entered path like "m/84'/0'/0'/0/0" into a ChildNumber list. */
+    @Nullable
+    private List<ChildNumber> parseUserPath(String pathStr) {
+        try {
+            String normalized = pathStr.trim()
+                    .replaceAll("(?i)^m/", "")
+                    .replace("'", "H");
+            if (normalized.isEmpty()) return null;
+            return HDUtils.parsePath(normalized);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Infer address type from BIP32 purpose index (first path element). */
+    private AddressType inferAddressType(List<ChildNumber> path) {
+        if (!path.isEmpty()) {
+            int purpose = path.get(0).num();
+            if (purpose == 84) return AddressType.NATIVE_SEGWIT;
+            if (purpose == 49) return AddressType.COMPATIBLE;
+        }
+        return AddressType.LEGACY;
+    }
+
     private String getUri() {
-        if (type instanceof BitFamily) {
-            return CoinURI.convertToCoinURI(receiveAddress, amount, label, message);
-        } else if (type instanceof NxtFamily){
+        if (receiveAddress == null) return "";
+        if (type instanceof NxtFamily) {
             return CoinURI.convertToCoinURI(receiveAddress, amount, label, message,
                     account.getPublicKeySerialized());
         } else {
-            throw new UnsupportedCoinTypeException(type);
+            // Works for BitFamily, EvmFamily, SolanaFamily, CardanoFamily, ChiaFamily, etc.
+            // Each coin's uriScheme (e.g. "ethereum", "solana") is used automatically.
+            return CoinURI.convertToCoinURI(receiveAddress, amount, label, message);
         }
     }
 

@@ -48,5 +48,99 @@
             <requestFocus />
 
         </EditText>
+
+        <!-- Advanced Settings (collapsible) -->
+        <TextView
+            android:id="@+id/advanced_settings_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/activity_vertical_margin"
+            android:text="@string/add_coin_advanced_settings_show"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            android:textColor="?attr/colorAccent"
+            android:padding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <LinearLayout
+            android:id="@+id/advanced_settings_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Address type selector -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                style="@style/SecondaryText"
+                android:text="@string/add_coin_address_type_label" />
+
+            <RadioGroup
+                android:id="@+id/address_type_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/addr_type_legacy"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/add_coin_address_type_legacy"
+                    android:checked="true" />
+
+                <RadioButton
+                    android:id="@+id/addr_type_compatible"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/add_coin_address_type_compatible" />
+
+                <RadioButton
+                    android:id="@+id/addr_type_native"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/add_coin_address_type_native" />
+
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/segwit_not_activated_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:textSize="12sp"
+                android:textColor="#F57C00"
+                android:text="@string/add_coin_segwit_not_activated" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                style="@style/SecondaryText"
+                android:text="@string/add_coin_derivation_path_label" />
+
+            <EditText
+                android:id="@+id/custom_derivation_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/NormalText"
+                android:imeOptions="flagNoExtractUi"
+                android:inputType="text"
+                android:singleLine="true"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/derivation_path_error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:textSize="12sp"
+                android:textColor="#D32F2F"
+                android:text="@string/add_coin_derivation_path_invalid" />
+
+        </LinearLayout>
+
     </LinearLayout>
 </ScrollView>

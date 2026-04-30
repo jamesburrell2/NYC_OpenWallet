@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     compileSdk 34
     namespace "com.openwallet.wallet"
@@ -8,16 +14,16 @@ android {
         applicationId "com.newyorkcoin.openwallet"
         minSdk 26
         targetSdk 34
-        versionCode 57
-        versionName "v1.7.0"
+        versionCode 61
+        versionName "v1.8.3"
     }
 
     signingConfigs {
         release {
-            storeFile file('newyorkcoin-release.keystore')
-            storePassword 'newyorkcoin123'
-            keyAlias 'newyorkcoin'
-            keyPassword 'newyorkcoin123'
+            storeFile file("../"+keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
         }
     }
 
@@ -31,8 +37,9 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
             minifyEnabled false
@@ -82,4 +89,8 @@ dependencies {
     annotationProcessor 'com.jakewharton:butterknife:7.0.1'
     implementation 'org.slf4j:slf4j-api:1.7.36'
     implementation 'com.squareup.okhttp:okhttp:2.7.5'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    // error-prone annotations: Tink references these at compile-time; include so R8 can resolve them (they'll be shrunk out)
+    implementation 'com.google.errorprone:error_prone_annotations:2.23.0'
 }

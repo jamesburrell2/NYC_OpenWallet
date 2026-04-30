@@ -51,7 +51,9 @@
         android:hardwareAccelerated="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/AppTheme" >
+        android:theme="@style/AppTheme"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false" >
         <activity
             android:name="com.openwallet.wallet.ui.WalletActivity"
             android:label="@string/app_name"
@@ -169,6 +171,14 @@
             android:theme="@style/AppTheme" >
         </activity>
         <activity
+            android:name="com.openwallet.wallet.ui.UnspentOutputsActivity"
+            android:label="@string/unspent_outputs_title"
+            android:theme="@style/AppTheme" >
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.openwallet.wallet.ui.WalletActivity" />
+        </activity>
+        <activity
             android:name="com.openwallet.wallet.ui.SettingsActivity"
             android:label="@string/title_activity_settings"
             android:theme="@style/AppTheme" >
@@ -187,6 +197,14 @@
         <activity
             android:name="com.openwallet.wallet.ui.TradeActivity"
             android:label="@string/title_activity_trade"
+            android:theme="@style/AppTheme" >
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.openwallet.wallet.ui.WalletActivity" />
+        </activity>
+        <activity
+            android:name="com.openwallet.wallet.ui.ManageWalletsActivity"
+            android:label="@string/title_activity_manage_wallets"
             android:theme="@style/AppTheme" >
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
@@ -244,6 +262,12 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="com.openwallet.wallet.ui.SettingsActivity" />
         </activity>
+        <activity
+            android:name="com.openwallet.wallet.ui.BiometricLockActivity"
+            android:label="@string/app_name"
+            android:theme="@style/AppTheme"
+            android:exported="false"
+            android:excludeFromRecents="true" />
 
         <provider
             android:name="com.openwallet.wallet.ExchangeRatesProvider"

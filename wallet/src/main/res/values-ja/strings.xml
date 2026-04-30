@@ -188,7 +188,6 @@
     <string name="adding_coin_working">新しい %1$s のアカウントを追加しています。しばらくお待ちください</string>
     <string name="add_coin_error">%1$s を追加する際にエラーが発生しました: %2$s</string>
     <string name="coin_already_added_title">%1$s は既に追加されています</string>
-    <string name="coin_already_added">追加のアカウントは現在のところサポートされていません</string>
     <!-- Transaction amount visualizer -->
     <string name="internal_transfer">ウォレット内部の送金</string>
     <!-- Transaction Details -->

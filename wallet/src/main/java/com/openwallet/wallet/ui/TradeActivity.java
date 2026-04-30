@@ -85,7 +85,7 @@ public class TradeActivity extends BaseWalletActivity implements
     }
 
     @Override
-    public void addCoin(CoinType type, String description, CharSequence password) {
+    public void addCoin(CoinType type, String description, CharSequence password, String customDerivationPath) {
         Fragment f = getFM().findFragmentByTag(TRADE_SELECT_FRAGMENT_TAG);
         if (f != null && f.isVisible() && f instanceof TradeSelectFragment) {
             ((TradeSelectFragment) f).maybeStartAddCoinAndProceedTask(description, password);

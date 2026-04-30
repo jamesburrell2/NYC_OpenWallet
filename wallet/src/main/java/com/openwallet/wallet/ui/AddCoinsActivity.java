@@ -10,6 +10,10 @@ import android.widget.Toast;
 import com.openwallet.core.coins.CoinID;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.NewYorkCoinMain;
+import com.openwallet.core.coins.families.CardanoFamily;
+import com.openwallet.core.coins.families.ChiaFamily;
+import com.openwallet.core.coins.families.EvmFamily;
+import com.openwallet.core.coins.families.SolanaFamily;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
 import com.openwallet.wallet.Constants;
@@ -61,8 +65,9 @@ public class AddCoinsActivity extends BaseWalletActivity
         if (wallet.isAccountExists(selectedCoin)) {
             new AlertDialog.Builder(this)
                     .setTitle(getString(R.string.coin_already_added_title, selectedCoin.getName()))
-                    .setMessage(R.string.coin_already_added)
-                    .setPositiveButton(R.string.button_ok, null)
+                    .setMessage(getString(R.string.coin_add_another_account, selectedCoin.getName()))
+                    .setPositiveButton(R.string.add_another_account, (dialog, which) -> showAddCoinDialog())
+                    .setNegativeButton(R.string.button_cancel, null)
                     .create().show();
             return;
         }
@@ -98,9 +103,9 @@ public class AddCoinsActivity extends BaseWalletActivity
     }
 
     @Override
-    public void addCoin(CoinType type, String description, CharSequence password) {
+    public void addCoin(CoinType type, String description, CharSequence password, String customDerivationPath) {
         if (type != null && addCoinTask == null) {
-            addCoinTask = new AddCoinTask(this, type, wallet, description, password);
+            addCoinTask = new AddCoinTask(this, type, wallet, description, password, customDerivationPath);
             addCoinTask.execute();
         }
     }
@@ -138,6 +143,14 @@ public class AddCoinsActivity extends BaseWalletActivity
                 finish();
             }
         } else {
+            // Persist EVM/Solana/Cardano/Chia coin IDs so they survive app restart
+            // (these families are not serialized in the wallet protobuf)
+            CoinType type = newAccount.getCoinType();
+            if (type instanceof EvmFamily || type instanceof SolanaFamily
+                    || type instanceof CardanoFamily || type instanceof ChiaFamily) {
+                ((WalletApplication) getApplication()).getConfiguration()
+                        .addEnabledHdCoinId(type.getId());
+            }
             result.putExtra(Constants.ARG_ACCOUNT_ID, newAccount.getId());
             setResult(RESULT_OK, result);
             finish();

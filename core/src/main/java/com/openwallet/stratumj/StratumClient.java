@@ -21,7 +21,6 @@ import java.io.InputStreamReader;
 import java.net.Socket;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -142,23 +141,15 @@ public class StratumClient extends AbstractExecutionThreadService {
 
         if (address.isUseTls()) {
             try {
-                SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
-                // Use a permissive trust manager for Electrum self-signed certificates
-                TrustManager[] trustAllCerts = new TrustManager[]{
-                        new X509TrustManager() {
-                            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                            public void checkClientTrusted(X509Certificate[] certs, String authType) { }
-                            public void checkServerTrusted(X509Certificate[] certs, String authType) { }
-                        }
-                };
-                sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-                SSLSocketFactory factory = sslContext.getSocketFactory();
+                // Use the system default SSLContext which validates against the device trust store.
+                // This correctly validates Let's Encrypt and other well-known CA certificates.
+                SSLSocketFactory factory = SSLContext.getDefault().getSocketFactory();
                 SSLSocket sslSocket = (SSLSocket) factory.createSocket(
                         address.getHost(), address.getPort());
                 sslSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
                 sslSocket.startHandshake();
                 return sslSocket;
-            } catch (NoSuchAlgorithmException | KeyManagementException e) {
+            } catch (NoSuchAlgorithmException e) {
                 throw new IOException("Failed to create TLS socket", e);
             }
         } else {
@@ -177,7 +168,7 @@ public class StratumClient extends AbstractExecutionThreadService {
             toServer = new DataOutputStream(socket.getOutputStream());
             fromServer = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         } catch (Exception e) {
-            log.info("Unable to create socket for {}", serverAddress);
+            log.info("Unable to create socket for {}: {} - {}", serverAddress, e.getClass().getSimpleName(), e.getMessage());
             triggerShutdown();
         }
     }

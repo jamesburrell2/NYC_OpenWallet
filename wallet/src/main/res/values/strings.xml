@@ -10,6 +10,9 @@
     <string name="action_edit_label">Edit label</string>
     <string name="action_empty_wallet">Use all funds</string>
     <string name="action_sweep_wallet">Sweep wallet</string>
+    <string name="action_unspent_outputs">Unspent Outputs</string>
+    <string name="unspent_outputs_title">Unspent Outputs</string>
+    <string name="unspent_outputs_empty">No unspent outputs</string>
     <string name="action_settings">Settings</string>
     <string name="action_support">Contact support</string>
     <string name="action_about">About</string>
@@ -70,6 +73,27 @@
     <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="navigation_drawer_services">Services</string>
     <string name="navigation_drawer_wallet">Wallet</string>
+    <string name="navigation_drawer_manage">Manage</string>
+    <!-- Manage Wallets activity -->
+    <string name="title_activity_manage_wallets">Manage Wallets</string>
+    <string name="manage_wallets_add_button">+ Add Wallet</string>
+    <string name="manage_wallets_tap_to_switch">Tap to switch</string>
+    <string name="manage_wallets_active_label">Active wallet</string>
+    <string name="manage_wallets_tap_for_options">Tap for options</string>
+    <string name="manage_wallets_switch_action">Switch to this wallet</string>
+    <string name="manage_wallets_rename_action">Rename</string>
+    <string name="manage_wallets_delete_action">Delete</string>
+    <string name="manage_wallets_options_active">%1$s (active)</string>
+    <string name="manage_wallets_empty_slot">Empty slot</string>
+    <string name="manage_wallets_switched">Switched to %1$s</string>
+    <string name="manage_wallets_rename_title">Rename Wallet</string>
+    <string name="manage_wallets_delete_title">Delete Wallet</string>
+    <string name="manage_wallets_delete_message">Delete wallet \"%1$s\"? This cannot be undone.</string>
+    <string name="manage_wallets_deleted">Deleted %1$s</string>
+    <string name="manage_wallets_max_reached">Maximum of 5 wallets reached</string>
+    <!-- Biometric lock screen -->
+    <string name="biometric_prompt_title">Unlock OpenWallet NYC</string>
+    <string name="biometric_prompt_subtitle">Authenticate to access your wallet</string>
     <!-- SendOutput widget -->
     <string name="fee">Transaction fee</string>
     <string name="send">Send</string>
@@ -228,7 +252,8 @@
     <string name="add_coin_error">Error adding %1$s: %2$s</string>
     <!-- %1$s is the coin name e.g. Bitcoin already added -->
     <string name="coin_already_added_title">%1$s already added</string>
-    <string name="coin_already_added">Additional accounts are not yet supported</string>
+    <string name="coin_add_another_account">A %1$s account already exists. Add another account with a new HD derivation path?</string>
+    <string name="add_another_account">Add Account</string>
     <!-- Transaction amount visualizer -->
     <!-- Internal transfer means that the wallet send money to itself.-->
     <string name="internal_transfer">Internal transfer</string>
@@ -278,6 +303,48 @@
     <string name="pref_title_exchange_rates">Exchange rates</string>
     <string name="pref_title_manual_receiving_addresses">Manual receiving addresses</string>
     <string name="pref_summary_manual_receiving_addresses">Do not automatically create a new address for every transaction</string>
+    <!-- Settings categories -->
+    <string name="pref_category_display">Display</string>
+    <string name="pref_category_privacy">Privacy</string>
+    <string name="pref_category_wallet">Wallet</string>
+    <string name="pref_category_advanced">Advanced</string>
+    <string name="pref_category_local_data">Local data</string>
+    <!-- Display settings -->
+    <string name="pref_title_dark_mode">Dark mode</string>
+    <string name="pref_summary_dark_mode">Use dark theme</string>
+    <string name="pref_title_language">Language</string>
+    <string name="pref_summary_language">Change app language</string>
+    <!-- Privacy settings -->
+    <string name="pref_title_hide_balances">Hide balances</string>
+    <string name="pref_summary_hide_balances">Mask balance values for privacy</string>
+    <string name="pref_title_screen_lock">Screen lock</string>
+    <string name="pref_summary_screen_lock">Lock app after 30 seconds in background</string>
+    <!-- Local data settings -->
+    <string name="pref_title_export_transactions">Export transactions</string>
+    <string name="pref_summary_export_transactions">Export transaction history as CSV</string>
+    <string name="pref_title_import_address_book">Import address book</string>
+    <string name="pref_summary_import_address_book">Import contacts from a CSV file</string>
+    <string name="pref_title_export_address_book">Export address book</string>
+    <string name="pref_summary_export_address_book">Save contacts as a CSV file</string>
+    <!-- Add coin advanced settings -->
+    <string name="add_coin_advanced_settings">ADVANCED SETTINGS</string>
+    <string name="add_coin_advanced_settings_hide">ADVANCED SETTINGS ▲</string>
+    <string name="add_coin_advanced_settings_show">ADVANCED SETTINGS ▼</string>
+    <string name="add_coin_address_type_label">Address type</string>
+    <string name="add_coin_address_type_legacy">Legacy (P2PKH)</string>
+    <string name="add_coin_address_type_compatible">SegWit-compatible (P2SH-P2WPKH)</string>
+    <string name="add_coin_address_type_native">Native SegWit (P2WPKH)</string>
+    <string name="add_coin_segwit_not_activated">Requires SegWit network activation</string>
+    <string name="add_coin_derivation_path_label">Derivation path</string>
+    <string name="add_coin_derivation_path_invalid">Invalid derivation path — using default</string>
+    <!-- Balance hidden placeholder -->
+    <string name="balance_hidden" translatable="false">●●●●●</string>
+    <!-- Export/import feedback -->
+    <string name="address_book_exported">Address book exported to %1$s</string>
+    <string name="address_book_imported">Imported %1$d contacts</string>
+    <string name="transactions_exported">Transactions exported to %1$s</string>
+    <string name="export_error">Export failed: %1$s</string>
+    <string name="import_error">Import failed: %1$s</string>
     <!-- Show Seed -->
     <string name="title_activity_show_seed">Show recovery phrase</string>
     <string name="seed_not_available_title">No recovery phrase found</string>
@@ -392,8 +459,9 @@
     <!-- Example: "Set server for Bitcoin" -->
     <string name="server_dialog_title">%1$s server</string>
     <!-- Example: "Enter the ElectrumX server for Bitcoin (hostname:port)." -->
-    <string name="server_dialog_description">Enter the ElectrumX server for %1$s (hostname:port). Leave blank or tap Default to use the built-in server.</string>
+    <string name="server_dialog_description">Enter the ElectrumX server for %1$s (hostname:port). Use the TLS checkbox to control encryption. Leave blank or tap Default to use the built-in server.</string>
     <string name="server_address_hint">hostname:port</string>
+    <string name="server_tls_label">Use TLS (encrypted connection)</string>
     <string name="server_not_configured">Not configured</string>
     <!-- Short label shown next to a user-overridden server address -->
     <string name="server_custom_label">(custom)</string>
@@ -469,6 +537,8 @@ This disclaimer was amended for the last time on June 9th, 2017.</string>
     <string name="address_type_compatible">Compatibility</string>
     <string name="address_type_native_segwit">Native SegWit</string>
     <string name="address_type_taproot">Taproot (receive only)</string>
+    <string name="address_type_custom_path_expand">Custom path ▾</string>
+    <string name="address_type_custom_path_collapse">Custom path ▴</string>
     <string name="taproot_receive_only_note">Taproot addresses can receive funds but cannot be spent from within this wallet yet.</string>
     <string name="taproot_destination_not_supported">Taproot destinations are not yet supported. Use a Taproot-capable wallet to send to this address.</string>
 

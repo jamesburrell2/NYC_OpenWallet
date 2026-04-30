@@ -7,6 +7,7 @@ import com.openwallet.core.network.interfaces.TransactionEventListener;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitBlockchainConnection;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitTransaction;
 import com.openwallet.core.wallet.families.bitcoin.BitTransactionEventListener;
 import com.openwallet.stratumj.ServerAddress;
@@ -66,7 +67,7 @@ public class ServerClient implements BitBlockchainConnection {
     }
     private static final Random RANDOM = new Random();
 
-    private static final long MAX_WAIT = 16;
+    private static final long MAX_WAIT = 300;
     private static final long CONNECTION_STABILIZATION = 30;
     private final ConnectivityHelper connectivityHelper;
 
@@ -78,6 +79,8 @@ public class ServerClient implements BitBlockchainConnection {
     private long retrySeconds = 0;
     private long reconnectAt = 0;
     private boolean stopped = false;
+    // True only after server.version handshake completes — prevents ping before handshake
+    private volatile boolean handshakeDone = false;
 
     private File cacheDir;
     private int cacheSize;
@@ -130,6 +133,7 @@ public class ServerClient implements BitBlockchainConnection {
         public void running() {
             // Check if connection is up as this event is fired even if there is no connection
             if (isActivelyConnected()) {
+                handshakeDone = false;
                 log.info("{} client connected to {}", type.getName(), lastServerAddress);
                 // ElectrumX 1.4+ requires server.version before any other call
                 final CallMessage versionMsg = new CallMessage("server.version",
@@ -139,6 +143,7 @@ public class ServerClient implements BitBlockchainConnection {
                     @Override
                     public void onSuccess(@Nullable ResultMessage result) {
                         log.info("{} server.version handshake OK", type.getName());
+                        handshakeDone = true;
                         broadcastOnConnection();
                         reschedule(connectionCheckTask, CONNECTION_STABILIZATION, TimeUnit.SECONDS);
                     }
@@ -146,6 +151,7 @@ public class ServerClient implements BitBlockchainConnection {
                     public void onFailure(Throwable t) {
                         log.warn("{} server.version failed ({}); proceeding anyway",
                                 type.getName(), t.getMessage());
+                        handshakeDone = true;
                         broadcastOnConnection();
                         reschedule(connectionCheckTask, CONNECTION_STABILIZATION, TimeUnit.SECONDS);
                     }
@@ -330,7 +336,32 @@ public class ServerClient implements BitBlockchainConnection {
     }
 
     private BlockHeader parseBlockHeader(CoinType type, JSONObject json) throws JSONException {
-        return new BlockHeader(type, json.getLong("timestamp"), json.getInt("block_height"));
+        if (json.has("height")) {
+            // ElectrumX 1.4+ format: {"hex": "...", "height": n}
+            int blockHeight = json.getInt("height");
+            long timestamp;
+            if (json.has("hex")) {
+                String hex = json.getString("hex");
+                // Timestamp is at byte offset 68 (little-endian uint32) in the 80-byte block header.
+                // AuxPoW headers are longer but the timestamp is still in the first 80 bytes.
+                if (hex.length() >= 160) {
+                    int hi = 68 * 2;
+                    long b0 = Character.digit(hex.charAt(hi),     16) << 4 | Character.digit(hex.charAt(hi + 1), 16);
+                    long b1 = Character.digit(hex.charAt(hi + 2), 16) << 4 | Character.digit(hex.charAt(hi + 3), 16);
+                    long b2 = Character.digit(hex.charAt(hi + 4), 16) << 4 | Character.digit(hex.charAt(hi + 5), 16);
+                    long b3 = Character.digit(hex.charAt(hi + 6), 16) << 4 | Character.digit(hex.charAt(hi + 7), 16);
+                    timestamp = (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 24);
+                } else {
+                    timestamp = System.currentTimeMillis() / 1000;
+                }
+            } else {
+                timestamp = System.currentTimeMillis() / 1000;
+            }
+            return new BlockHeader(type, timestamp, blockHeight);
+        } else {
+            // Legacy ElectrumX format: {"block_height": n, "timestamp": n, ...}
+            return new BlockHeader(type, json.getLong("timestamp"), json.getInt("block_height"));
+        }
     }
 
     @Override
@@ -384,25 +415,35 @@ public class ServerClient implements BitBlockchainConnection {
      * Scripthash = SHA256(scriptPubKey) with bytes reversed (little-endian), hex-encoded.
      */
     private static String toScripthash(AbstractAddress addr) {
-        BitAddress address = (BitAddress) addr;
-        byte[] hash160 = address.getHash160();
+        byte[] hash160;
         byte[] scriptPubKey;
-        if (address.isP2SHAddress()) {
-            // P2SH: OP_HASH160 <hash160> OP_EQUAL  (23 bytes)
-            scriptPubKey = new byte[23];
-            scriptPubKey[0] = (byte) 0xa9;
-            scriptPubKey[1] = (byte) 0x14;
+        if (addr instanceof SegwitAddress) {
+            // P2WPKH: OP_0 OP_PUSHBYTES_20 <hash160>  (22 bytes)
+            hash160 = ((SegwitAddress) addr).getHash160();
+            scriptPubKey = new byte[22];
+            scriptPubKey[0] = (byte) 0x00; // OP_0
+            scriptPubKey[1] = (byte) 0x14; // PUSH 20 bytes
             System.arraycopy(hash160, 0, scriptPubKey, 2, 20);
-            scriptPubKey[22] = (byte) 0x87;
         } else {
-            // P2PKH: OP_DUP OP_HASH160 <hash160> OP_EQUALVERIFY OP_CHECKSIG  (25 bytes)
-            scriptPubKey = new byte[25];
-            scriptPubKey[0] = (byte) 0x76;
-            scriptPubKey[1] = (byte) 0xa9;
-            scriptPubKey[2] = (byte) 0x14;
-            System.arraycopy(hash160, 0, scriptPubKey, 3, 20);
-            scriptPubKey[23] = (byte) 0x88;
-            scriptPubKey[24] = (byte) 0xac;
+            BitAddress address = (BitAddress) addr;
+            hash160 = address.getHash160();
+            if (address.isP2SHAddress()) {
+                // P2SH: OP_HASH160 <hash160> OP_EQUAL  (23 bytes)
+                scriptPubKey = new byte[23];
+                scriptPubKey[0] = (byte) 0xa9;
+                scriptPubKey[1] = (byte) 0x14;
+                System.arraycopy(hash160, 0, scriptPubKey, 2, 20);
+                scriptPubKey[22] = (byte) 0x87;
+            } else {
+                // P2PKH: OP_DUP OP_HASH160 <hash160> OP_EQUALVERIFY OP_CHECKSIG  (25 bytes)
+                scriptPubKey = new byte[25];
+                scriptPubKey[0] = (byte) 0x76;
+                scriptPubKey[1] = (byte) 0xa9;
+                scriptPubKey[2] = (byte) 0x14;
+                System.arraycopy(hash160, 0, scriptPubKey, 3, 20);
+                scriptPubKey[23] = (byte) 0x88;
+                scriptPubKey[24] = (byte) 0xac;
+            }
         }
         byte[] sha256 = Sha256Hash.create(scriptPubKey).getBytes();
         // Reverse bytes for ElectrumX little-endian convention
@@ -728,23 +769,18 @@ public class ServerClient implements BitBlockchainConnection {
             log.warn("There is no connection with {} server, skipping ping.", type.getName());
             return;
         }
-
-        if (versionString == null) {
-            versionString = this.getClass().getCanonicalName();
+        if (!handshakeDone) {
+            log.debug("Skipping ping for {} — handshake not yet complete.", type.getName());
+            return;
         }
 
-        final CallMessage pingMsg = new CallMessage("server.version",
-                ImmutableList.of(versionString, CLIENT_PROTOCOL));
+        // Use server.ping for keepalive — server.version is only valid once per session
+        final CallMessage pingMsg = new CallMessage("server.ping", ImmutableList.of());
         ListenableFuture<ResultMessage> pong = stratumClient.call(pingMsg);
         Futures.addCallback(pong, new FutureCallback<ResultMessage>() {
             @Override
             public void onSuccess(@Nullable ResultMessage result) {
-                if (log.isDebugEnabled()) {
-                    try {
-                        log.debug("Server {} version {} OK", type.getName(),
-                                checkNotNull(result).getResult().get(0));
-                    } catch (Exception ignore) { }
-                }
+                log.debug("Server {} ping OK", type.getName());
             }
 
             @Override

@@ -13,9 +13,15 @@ import android.os.StrictMode;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.widget.Toast;
+import androidx.appcompat.app.AppCompatDelegate;
 
+import com.openwallet.core.coins.CoinID;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
+import com.openwallet.core.coins.families.CardanoFamily;
+import com.openwallet.core.coins.families.ChiaFamily;
+import com.openwallet.core.coins.families.EvmFamily;
+import com.openwallet.core.coins.families.SolanaFamily;
 import com.openwallet.core.exchange.shapeshift.ShapeShift;
 import com.openwallet.core.util.HardwareSoftwareCompliance;
 import com.openwallet.core.wallet.AbstractAddress;
@@ -38,12 +44,16 @@ import org.bitcoinj.store.UnreadableWalletException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import android.content.SharedPreferences;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -84,6 +94,11 @@ public class WalletApplication extends Application {
 
         config = new Configuration(PreferenceManager.getDefaultSharedPreferences(this));
 
+        // Apply saved dark mode preference before any activity launches
+        AppCompatDelegate.setDefaultNightMode(config.isDarkMode()
+                ? AppCompatDelegate.MODE_NIGHT_YES
+                : AppCompatDelegate.MODE_NIGHT_NO);
+
         new LinuxSecureRandom(); // init proper random number generator
         performComplianceTests();
 
@@ -122,7 +137,7 @@ public class WalletApplication extends Application {
 
         connManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
 
-        walletFile = getFileStreamPath(Constants.WALLET_FILENAME_PROTOBUF);
+        walletFile = getWalletFileForIndex(getActiveWalletIndex());
         loadWallet();
 
         afterLoadWallet();
@@ -186,6 +201,7 @@ public class WalletApplication extends Application {
 
     private void afterLoadWallet() {
         setupFeeProvider();
+        restoreHdFamilyCoins();
 //        wallet.autosaveToFile(walletFile, 1, TimeUnit.SECONDS, new WalletAutosaveEventListener());
 //
         // clean up spam
@@ -203,6 +219,49 @@ public class WalletApplication extends Application {
                 return config.getFeeValue(type);
             }
         });
+    }
+
+    /**
+     * Re-creates EVM/Solana/Cardano/Chia wallet accounts that were added by the user but are
+     * not persisted in the wallet protobuf.  Only possible for unencrypted wallets; encrypted
+     * wallets will recreate their accounts the next time the user explicitly adds the coin.
+     */
+    private void restoreHdFamilyCoins() {
+        if (wallet == null || wallet.isEncrypted()) return;
+        List<CoinType> missing = new ArrayList<>();
+
+        // Always ensure DEFAULT_COINS (NYC) are present in the wallet.
+        for (CoinType type : Constants.DEFAULT_COINS) {
+            if (!wallet.isAccountExists(type)) {
+                missing.add(type);
+            }
+        }
+
+        // Also restore EVM/Solana/Cardano/Chia coins that the user previously added.
+        Set<String> savedIds = config.getEnabledHdCoinIds();
+        for (String id : savedIds) {
+            try {
+                CoinType type = CoinID.typeFromId(id);
+                if (!wallet.isAccountExists(type)) {
+                    boolean isHdFamily = type instanceof EvmFamily
+                            || type instanceof SolanaFamily
+                            || type instanceof CardanoFamily
+                            || type instanceof ChiaFamily;
+                    if (isHdFamily && !missing.contains(type)) missing.add(type);
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Unknown coin ID — skip
+            }
+        }
+
+        if (!missing.isEmpty()) {
+            try {
+                wallet.createAccounts(missing, false, null);
+                log.info("Restored {} coin accounts after wallet load", missing.size());
+            } catch (Exception e) {
+                log.warn("Failed to restore coins: {}", e.getMessage());
+            }
+        }
     }
 
     private void initLogging() {
@@ -434,5 +493,137 @@ public class WalletApplication extends Application {
             coinServiceConnectIntent.putExtra(Constants.ARG_ACCOUNT_ID, account.getId());
             startService(coinServiceConnectIntent);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-wallet support (up to MAX_WALLETS slots)
+    // -------------------------------------------------------------------------
+
+    private static final int MAX_WALLETS = 5;
+    private static final String MW_PREFS_ACTIVE  = "mw_active_index";
+    private static final String MW_PREFS_COUNT   = "mw_count";
+    private static final String MW_PREFS_NAME    = "mw_name_";
+
+    /** Wallet file for the given slot index. Slot 0 reuses the legacy "wallet" file. */
+    private File getWalletFileForIndex(int index) {
+        if (index == 0) return getFileStreamPath(Constants.WALLET_FILENAME_PROTOBUF);
+        return getFileStreamPath(Constants.WALLET_FILENAME_PROTOBUF + "_" + index);
+    }
+
+    private SharedPreferences mwPrefs() {
+        return PreferenceManager.getDefaultSharedPreferences(this);
+    }
+
+    public int getWalletCount() {
+        int stored = mwPrefs().getInt(MW_PREFS_COUNT, -1);
+        if (stored < 0) {
+            // First run: count = 1 if slot-0 wallet file already exists, else 0.
+            // Always check slot 0's file (not the mutable walletFile field which may point to
+            // a different slot after getActiveWalletIndex() was applied during startup).
+            int inferred = getWalletFileForIndex(0).exists() ? 1 : 0;
+            mwPrefs().edit().putInt(MW_PREFS_COUNT, inferred).apply();
+            return inferred;
+        }
+        return stored;
+    }
+
+    public int getActiveWalletIndex() {
+        return mwPrefs().getInt(MW_PREFS_ACTIVE, 0);
+    }
+
+    /** Returns the loaded Wallet object for the given slot, or null if the slot is not active / empty. */
+    @Nullable
+    public Wallet getWalletAtIndex(int index) {
+        if (index == getActiveWalletIndex()) return wallet;
+        // Other slots are not kept in memory; indicate existence via file presence.
+        File f = getWalletFileForIndex(index);
+        return f.exists() ? wallet : null; // non-null signals "slot exists" to the UI
+    }
+
+    public String getWalletName(int index) {
+        return mwPrefs().getString(MW_PREFS_NAME + index, "Wallet " + (index + 1));
+    }
+
+    public void setWalletName(int index, String name) {
+        mwPrefs().edit().putString(MW_PREFS_NAME + index, name).apply();
+    }
+
+    /**
+     * Switch the active wallet to the given slot index.
+     * Saves the current wallet first, then loads the wallet at {@code index}.
+     */
+    public void switchToWallet(int index) {
+        if (index < 0 || index >= MAX_WALLETS) return;
+        if (index == getActiveWalletIndex()) return;
+
+        // Persist current wallet before switching
+        saveWalletNow();
+        stopBlockchainService();
+
+        mwPrefs().edit().putInt(MW_PREFS_ACTIVE, index).apply();
+
+        // Update walletFile reference to the new slot and reload
+        walletFile = getWalletFileForIndex(index);
+        loadWallet();
+        afterLoadWallet();
+
+        // Restart the blockchain service so it connects to the new wallet's accounts,
+        // then send ACTION_RESET_WALLET to rebuild server connections and refresh UTXOs.
+        startBlockchainService(CoinService.ServiceMode.NORMAL);
+        Intent resetIntent = new Intent(CoinService.ACTION_RESET_WALLET, null,
+                this, CoinServiceImpl.class);
+        startService(resetIntent);
+    }
+
+    /**
+     * Prepare a new wallet slot so the next wallet creation writes to a fresh file
+     * rather than overwriting the current one. Saves the current wallet, advances the
+     * active-slot pointer to the new slot, and returns the new slot index.
+     * Returns -1 if no more slots are available.
+     */
+    public int prepareNewWalletSlot() {
+        int newIndex = getWalletCount();
+        if (newIndex >= MAX_WALLETS) return -1;
+
+        // Persist current wallet before switching context
+        saveWalletNow();
+
+        // Shutdown autosave of current wallet so it does not race with the new one
+        if (wallet != null) {
+            wallet.shutdownAutosaveAndWait();
+            wallet = null;
+        }
+
+        // Register and activate the new slot
+        mwPrefs().edit()
+                .putInt(MW_PREFS_COUNT, newIndex + 1)
+                .putInt(MW_PREFS_ACTIVE, newIndex)
+                .apply();
+
+        // Point walletFile to the new slot file
+        walletFile = newIndex == 0
+                ? getFileStreamPath(Constants.WALLET_FILENAME_PROTOBUF)
+                : getFileStreamPath(Constants.WALLET_FILENAME_PROTOBUF + "_" + newIndex);
+
+        return newIndex;
+    }
+
+    /**
+     * Delete the wallet at the given slot. Cannot delete the active wallet.
+     * Returns true on success.
+     */
+    public boolean deleteWallet(int index) {
+        if (index == getActiveWalletIndex()) return false; // refuse to delete active
+        File f = getWalletFileForIndex(index);
+        if (!f.exists()) return false;
+        boolean deleted = f.delete();
+        if (deleted) {
+            int count = Math.max(0, getWalletCount() - 1);
+            mwPrefs().edit()
+                    .putInt(MW_PREFS_COUNT, count)
+                    .remove(MW_PREFS_NAME + index)
+                    .apply();
+        }
+        return deleted;
     }
 }

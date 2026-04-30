@@ -188,7 +188,6 @@
     <string name="adding_coin_working">在创建%1$s 帐号时，请等待。</string>
     <string name="add_coin_error">添加 %1$s: %2$s 时出错。</string>
     <string name="coin_already_added_title">%1$s 已添加。</string>
-    <string name="coin_already_added">尚未支持多余帐号。</string>
     <!-- Transaction amount visualizer -->
     <string name="internal_transfer">内部转移</string>
     <!-- Transaction Details -->

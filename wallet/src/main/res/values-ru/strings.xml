@@ -194,7 +194,6 @@
     <string name="adding_coin_working">Пожалуйста подождите пока создаётся новый %1$s счёт</string>
     <string name="add_coin_error">Ошибка добавления %1$s: %2$s</string>
     <string name="coin_already_added_title">%1$s уже добавлен</string>
-    <string name="coin_already_added">Дополнительные учетные записи пока не поддерживаются</string>
     <!-- Transaction amount visualizer -->
     <string name="internal_transfer">Внутренний перевод</string>
     <!-- Transaction Details -->

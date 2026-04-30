@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration
+    ================================
+    - All cleartext traffic is blocked (enforces HTTPS/TLS for all network calls).
+    - Certificate pinning for the NYC ElectrumX server.
+      To rotate the pin: generate the SHA-256 SPKI hash of the new cert with:
+          openssl s_client -connect electrum.paywith.nyc:50002 2>/dev/null \
+              | openssl x509 -pubkey -noout \
+              | openssl pkey -pubin -outform der \
+              | openssl dgst -sha256 -binary \
+              | base64
+      Then replace the pin value below and update backupPin with the previous pin.
+-->
+<network-security-config>
+
+    <!-- Block all cleartext (HTTP) traffic app-wide -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust only the system CA store (no user-installed CAs) -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+        NYC ElectrumX server pin.
+        Pin set should contain the SPKI hash of the leaf cert AND a backup CA/intermediate pin
+        so the app continues to work if the leaf cert is rotated before the app is updated.
+        Update these pins whenever the server certificate is renewed.
+    -->
+    <domain-config>
+        <domain includeSubdomains="false">electrum.paywith.nyc</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- Primary: SPKI hash of the leaf cert (Let's Encrypt, expires 2026-07-20) -->
+            <pin digest="SHA-256">Yce/3wk75/j2IrgpCFwiFZCGnxFB5dAIxjlxmtwgqlk=</pin>
+            <!-- Backup: SPKI hash of the Let's Encrypt E7 intermediate CA -->
+            <pin digest="SHA-256">y7xVm0TVJNahMr2sZydE2jQH8SquXV9yLF9seROHHHU=</pin>
+        </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+</network-security-config>

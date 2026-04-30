@@ -191,7 +191,6 @@
     <string name="adding_coin_working">Per favore attendi sta per essere creato un nuovo %1$s conto</string>
     <string name="add_coin_error">Errore nell\'aggiunta %1$s: %2$s</string>
     <string name="coin_already_added_title">%1$s già aggiunto</string>
-    <string name="coin_already_added">I conti aggiuntivi non sono ancora supportati</string>
     <!-- Transaction amount visualizer -->
     <string name="internal_transfer">Trasferimento interno</string>
     <!-- Transaction Details -->

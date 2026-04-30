@@ -38,8 +38,6 @@ public enum CoinID {
     DIGIBYTE_MAIN(DigibyteMain.get()),
     VERTCOIN_MAIN(VertcoinMain.get()),
     POTCOIN_MAIN(PotcoinMain.get()),
-    ETHEREUM_MAIN(EthereumMain.get()),
-    SOLANA_MAIN(SolanaMain.get()),
     CARDANO_MAIN(CardanoMain.get()),
     CHIA_MAIN(ChiaMain.get()),
     ;

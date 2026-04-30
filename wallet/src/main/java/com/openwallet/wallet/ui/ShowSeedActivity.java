@@ -2,6 +2,7 @@ package com.openwallet.wallet.ui;
 
 import android.content.DialogInterface;
 import android.os.Bundle;
+import android.view.WindowManager;
 
 import com.openwallet.wallet.R;
 
@@ -14,6 +15,9 @@ public class ShowSeedActivity extends BaseWalletActivity implements ShowSeedFrag
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Prevent screenshots and screen recording while seed is visible
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_fragment_wrapper);
 

@@ -1201,6 +1201,15 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
         try {
             this.blockchainConnection = (BitBlockchainConnection) blockchainConnection;
             clearTransientState();
+            // If no UTXOs are loaded (e.g. wallet file was saved with an empty UTXO set while
+            // address statuses were already persisted), the cached statuses would match the
+            // server's reply and onAddressStatusUpdate() would skip the UTXO fetch entirely,
+            // leaving the balance stuck at zero.  Clearing the cached statuses forces every
+            // address to appear "changed" on the next server reply so UTXOs are always fetched
+            // when the in-memory UTXO set is empty.
+            if (unspentOutputs.isEmpty()) {
+                addressesStatus.clear();
+            }
             subscribeToBlockchain();
             subscribeToAddressesIfNeeded();
             queueOnConnectivity();
@@ -1511,7 +1520,7 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
 
     }
 
-    Map<TrimmedOutPoint, OutPointOutput> getUnspentOutputs(boolean includeUnsafe) {
+    public Map<TrimmedOutPoint, OutPointOutput> getUnspentOutputs(boolean includeUnsafe) {
         lock.lock();
         try {
             // The confirmed UTXO set

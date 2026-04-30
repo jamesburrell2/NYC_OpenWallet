@@ -14,7 +14,10 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -59,6 +62,12 @@ public class Configuration {
     public static final String PREFS_KEY_TERMS_ACCEPTED = "terms_accepted";
 
     private static final String PREFS_KEY_NYC_ELECTRUM_SERVER = "nyc_electrum_server";
+    /** Coin type IDs for EVM/Solana/Cardano/Chia accounts that are not stored in the wallet protobuf. */
+    private static final String PREFS_KEY_ENABLED_HD_COINS = "enabled_hd_coin_ids";
+
+    public static final String PREFS_KEY_DARK_MODE = "dark_mode";
+    public static final String PREFS_KEY_HIDE_BALANCES = "hide_balances";
+    public static final String PREFS_KEY_SCREEN_LOCK_ENABLED = "screen_lock_enabled";
 
     private static final int PREFS_DEFAULT_BTC_SHIFT = 3;
     private static final int PREFS_DEFAULT_BTC_PRECISION = 2;
@@ -286,6 +295,66 @@ public class Configuration {
             editor.putString("coin_server_" + type.getId(), hostPort);
         }
         editor.apply();
+    }
+
+    /**
+     * Record that an EVM/Solana/Cardano/Chia coin account was added to the wallet.
+     * These coin families are not serialized in the wallet protobuf, so we track them
+     * here and recreate them on load via {@link WalletApplication#restoreHdFamilyCoins}.
+     */
+    public void addEnabledHdCoinId(String coinId) {
+        Set<String> current = new HashSet<>(prefs.getStringSet(PREFS_KEY_ENABLED_HD_COINS,
+                Collections.<String>emptySet()));
+        current.add(coinId);
+        prefs.edit().putStringSet(PREFS_KEY_ENABLED_HD_COINS, current).apply();
+    }
+
+    /**
+     * Remove a coin ID from the enabled-coins list (e.g. when the user removes the account).
+     */
+    public void removeEnabledHdCoinId(String coinId) {
+        Set<String> current = new HashSet<>(prefs.getStringSet(PREFS_KEY_ENABLED_HD_COINS,
+                Collections.<String>emptySet()));
+        if (current.remove(coinId)) {
+            prefs.edit().putStringSet(PREFS_KEY_ENABLED_HD_COINS, current).apply();
+        }
+    }
+
+    /**
+     * Returns the set of coin type IDs that should be present in the wallet but are not
+     * persisted in the protobuf (EVM/Solana/Cardano/Chia families).
+     */
+    public Set<String> getEnabledHdCoinIds() {
+        return Collections.unmodifiableSet(
+                prefs.getStringSet(PREFS_KEY_ENABLED_HD_COINS, Collections.<String>emptySet()));
+    }
+
+    // ── Display ──────────────────────────────────────────────────────────────
+
+    public boolean isDarkMode() {
+        return prefs.getBoolean(PREFS_KEY_DARK_MODE, false);
+    }
+
+    public void setDarkMode(boolean enabled) {
+        prefs.edit().putBoolean(PREFS_KEY_DARK_MODE, enabled).apply();
+    }
+
+    // ── Privacy ──────────────────────────────────────────────────────────────
+
+    public boolean isHideBalances() {
+        return prefs.getBoolean(PREFS_KEY_HIDE_BALANCES, false);
+    }
+
+    public void setHideBalances(boolean enabled) {
+        prefs.edit().putBoolean(PREFS_KEY_HIDE_BALANCES, enabled).apply();
+    }
+
+    public boolean isScreenLockEnabled() {
+        return prefs.getBoolean(PREFS_KEY_SCREEN_LOCK_ENABLED, true);
+    }
+
+    public void setScreenLockEnabled(boolean enabled) {
+        prefs.edit().putBoolean(PREFS_KEY_SCREEN_LOCK_ENABLED, enabled).apply();
     }
 
 }

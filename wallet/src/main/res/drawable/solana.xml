@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solana (SOL) placeholder icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <path
+        android:fillColor="#9945FF"
+        android:pathData="M32,2a30,30 0,1 0,0.001 0Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,22 L46,22 L46,27 L18,27 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,30 L46,30 L46,35 L18,35 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,38 L46,38 L46,43 L18,43 Z"/>
+</vector>

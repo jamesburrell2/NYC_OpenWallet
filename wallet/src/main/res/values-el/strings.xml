@@ -191,7 +191,6 @@
     <string name="adding_coin_working">Παρακαλώ περιμένετε ενόσω δημιουργείται ένας νέος %1$s λογαριασμός</string>
     <string name="add_coin_error">Σφάλμα προθήκης του %1$s: %2$s</string>
     <string name="coin_already_added_title">Το %1$s έχει ήδη προστεθεί</string>
-    <string name="coin_already_added">Οι πολλαπλοί λογαριασμοί δεν υποστηρίζονται ακόμα</string>
     <!-- Transaction amount visualizer -->
     <string name="internal_transfer">Εσωτερική μεταφορά</string>
     <!-- Transaction Details -->

@@ -70,12 +70,15 @@ public class FinalizeWalletRestorationFragment extends Fragment {
         if (getArguments() != null) {
             Bundle args = getArguments();
             String seed = args.getString(Constants.ARG_SEED);
+            // Remove seed from Bundle immediately after reading to minimise in-memory exposure
+            args.remove(Constants.ARG_SEED);
             String password = args.getString(Constants.ARG_PASSWORD);
             String seedPassword = args.getString(Constants.ARG_SEED_PASSWORD);
             List<CoinType> coinsToCreate = getCoinsTypes(args);
 
             if (walletFromSeedTask == null) {
-                walletFromSeedTask = new WalletFromSeedTask(handler, app, coinsToCreate, seed, password, seedPassword);
+                boolean addNewWallet = args.getBoolean(IntroActivity.ARG_ADD_NEW_WALLET, false);
+                walletFromSeedTask = new WalletFromSeedTask(handler, app, coinsToCreate, seed, password, seedPassword, addNewWallet);
                 walletFromSeedTask.execute();
             } else {
                 switch (walletFromSeedTask.getStatus()) {
@@ -119,20 +122,22 @@ public class FinalizeWalletRestorationFragment extends Fragment {
     static class WalletFromSeedTask extends AsyncTask<Void, String, Wallet> {
         Wallet wallet;
         String errorMessage = "";
-        private final String seed;
+        private String seed;
         private final String password;
         @Nullable private final String seedPassword;
+        private final boolean addNewWallet;
         Handler handler;
         private final WalletApplication walletApplication;
         private final List<CoinType> coinsToCreate;
 
-        public WalletFromSeedTask(Handler handler, WalletApplication walletApplication, List<CoinType> coinsToCreate, String seed, String password, @Nullable String seedPassword) {
+        public WalletFromSeedTask(Handler handler, WalletApplication walletApplication, List<CoinType> coinsToCreate, String seed, String password, @Nullable String seedPassword, boolean addNewWallet) {
             this.handler = handler;
             this.walletApplication = walletApplication;
             this.coinsToCreate = coinsToCreate;
             this.seed = seed;
             this.password = password;
             this.seedPassword = seedPassword;
+            this.addNewWallet = addNewWallet;
         }
 
         protected Wallet doInBackground(Void... params) {
@@ -148,7 +153,12 @@ public class FinalizeWalletRestorationFragment extends Fragment {
 
             try {
                 this.publishProgress("");
-                walletApplication.setEmptyWallet();
+                if (addNewWallet) {
+                    // Create a new slot — does NOT touch the existing wallet file
+                    walletApplication.prepareNewWalletSlot();
+                } else {
+                    walletApplication.setEmptyWallet();
+                }
                 wallet = new Wallet(seedWords, seedPassword);
                 KeyParameter aesKey = null;
                 if (password != null && !password.isEmpty()) {
@@ -168,6 +178,9 @@ public class FinalizeWalletRestorationFragment extends Fragment {
                 log.error("Error creating a wallet", e);
                 errorMessage = e.getMessage();
                 wallet = null;
+            } finally {
+                // Null out the seed String to reduce its lifetime in memory
+                this.seed = null;
             }
             return wallet;
         }

@@ -12,6 +12,7 @@ import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.TransactionConfidence;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 
@@ -47,6 +48,28 @@ public class EvmTransaction implements AbstractTransaction, Serializable {
         this.blockHeight = blockHeight;
         this.confidence = blockHeight > 0 ? TransactionConfidence.ConfidenceType.BUILDING
                 : TransactionConfidence.ConfidenceType.PENDING;
+    }
+
+    /**
+     * Sentinel constructor used to deliver a balance update from the server client.
+     * The txHash is set to null; callers should check {@link #isBalanceSentinel()}.
+     */
+    public EvmTransaction(CoinType type, BigInteger balanceWei) {
+        this.type = type;
+        this.txHash = null;
+        this.from = null;
+        this.to = null;
+        // Cap at Long.MAX_VALUE — no wallet will ever hold that much ETH
+        this.valueSatoshis = balanceWei.bitLength() < 63 ? balanceWei.longValue() : Long.MAX_VALUE;
+        this.feeSatoshis = 0;
+        this.timestamp = System.currentTimeMillis();
+        this.blockHeight = -1;
+        this.confidence = TransactionConfidence.ConfidenceType.UNKNOWN;
+    }
+
+    /** Returns true if this object is a balance-update sentinel, not a real transaction. */
+    public boolean isBalanceSentinel() {
+        return txHash == null;
     }
 
     @Override

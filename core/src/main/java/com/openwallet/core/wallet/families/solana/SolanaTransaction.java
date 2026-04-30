@@ -47,6 +47,26 @@ public class SolanaTransaction implements AbstractTransaction, Serializable {
                 : TransactionConfidence.ConfidenceType.PENDING;
     }
 
+    /**
+     * Sentinel constructor for delivering a balance update from the server client.
+     */
+    public SolanaTransaction(CoinType type, long balanceLamports) {
+        this.type = type;
+        this.signature = null;
+        this.from = null;
+        this.to = null;
+        this.lamports = balanceLamports;
+        this.feeLamports = 0;
+        this.timestamp = System.currentTimeMillis();
+        this.slot = -1;
+        this.confidence = TransactionConfidence.ConfidenceType.UNKNOWN;
+    }
+
+    /** Returns true if this object is a balance-update sentinel, not a real transaction. */
+    public boolean isBalanceSentinel() {
+        return signature == null;
+    }
+
     @Override
     public CoinType getType() {
         return type;

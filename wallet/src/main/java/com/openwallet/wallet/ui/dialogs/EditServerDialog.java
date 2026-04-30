@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import androidx.fragment.app.DialogFragment;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 
@@ -32,6 +33,7 @@ import static com.openwallet.core.Preconditions.checkState;
 public class EditServerDialog extends DialogFragment {
     @Bind(R.id.server_description) TextView description;
     @Bind(R.id.server_address) EditText serverAddressInput;
+    @Bind(R.id.server_tls) CheckBox tlsCheckbox;
 
     private Configuration configuration;
 
@@ -62,7 +64,27 @@ public class EditServerDialog extends DialogFragment {
 
         String currentServer = configuration.getCoinElectrumServer(type);
         if (currentServer != null && !currentServer.isEmpty()) {
-            serverAddressInput.setText(currentServer);
+            // Strip optional :true/:false TLS suffix before showing in the text field
+            boolean savedTls = true; // default
+            String displayServer = currentServer;
+            if (currentServer.endsWith(":true")) {
+                savedTls = true;
+                displayServer = currentServer.substring(0, currentServer.length() - 5);
+            } else if (currentServer.endsWith(":false")) {
+                savedTls = false;
+                displayServer = currentServer.substring(0, currentServer.length() - 6);
+            } else {
+                // Legacy format — infer TLS from port number
+                int lc = currentServer.lastIndexOf(':');
+                if (lc > 0) {
+                    try {
+                        int p = Integer.parseInt(currentServer.substring(lc + 1));
+                        savedTls = (p == 50002 || p == 60002);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            serverAddressInput.setText(displayServer);
+            tlsCheckbox.setChecked(savedTls);
         }
 
         final DialogBuilder builder = new DialogBuilder(getActivity());
@@ -75,7 +97,12 @@ public class EditServerDialog extends DialogFragment {
                 switch (which) {
                     case DialogInterface.BUTTON_POSITIVE:
                         String input = serverAddressInput.getText().toString().trim();
-                        configuration.setCoinElectrumServer(type, input.isEmpty() ? null : input);
+                        if (input.isEmpty()) {
+                            configuration.setCoinElectrumServer(type, null);
+                        } else {
+                            String withTls = input + (tlsCheckbox.isChecked() ? ":true" : ":false");
+                            configuration.setCoinElectrumServer(type, withTls);
+                        }
                         restartCoinService();
                         break;
                     case DialogInterface.BUTTON_NEUTRAL:

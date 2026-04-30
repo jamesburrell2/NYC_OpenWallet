@@ -224,6 +224,9 @@ public class NavigationDrawerFragment extends Fragment {
                 case ITEM_OVERVIEW:
                     listener.onOverviewSelected();
                     break;
+                case ITEM_MANAGE_WALLETS:
+                    listener.onManageWalletsSelected();
+                    break;
             }
         }
     }
@@ -316,5 +319,6 @@ public class NavigationDrawerFragment extends Fragment {
         void onAddCoinsSelected();
         void onTradeSelected();
         void onOverviewSelected();
+        void onManageWalletsSelected();
     }
 }

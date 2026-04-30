@@ -21,6 +21,7 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
+import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.DeterministicHierarchy;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.crypto.HDKeyDerivation;
@@ -86,6 +87,16 @@ final public class Wallet {
         this(mnemonic, null);
     }
 
+    /**
+     * Construct a wallet from a mnemonic supplied as a char array.
+     * The array is zeroed after the seed bytes are derived to limit
+     * the window during which the plaintext mnemonic lives in memory.
+     */
+    public Wallet(char[] mnemonic) throws MnemonicException {
+        this(CoreUtils.parseMnemonic(new String(mnemonic)), null);
+        java.util.Arrays.fill(mnemonic, '\0');
+    }
+
     public Wallet(List<String> mnemonic, @Nullable String password) throws MnemonicException {
         MnemonicCode.INSTANCE.check(mnemonic);
         password = password == null ? "" : password;
@@ -145,6 +156,24 @@ final public class Wallet {
     public WalletAccount createAccount(CoinType coin, boolean generateAllKeys,
                                   @Nullable KeyParameter key) {
         return createAccounts(Lists.newArrayList(coin), generateAllKeys, key).get(0);
+    }
+
+    /**
+     * Create an account for the given coin using a user-supplied BIP32 account-level path
+     * (e.g. [44H, 0H, 0H]) instead of the auto-derived index-based path.
+     * Falls through to the standard path if customPath is null or empty.
+     */
+    public WalletAccount createAccountAtCustomPath(CoinType coin, List<ChildNumber> customPath,
+                                                   boolean generateAllKeys,
+                                                   @Nullable KeyParameter key) {
+        lock.lock();
+        try {
+            WalletAccount newAccount = createAndAddAccountAtPath(coin, customPath, key);
+            if (generateAllKeys) newAccount.maybeInitializeAllKeys();
+            return newAccount;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public List<WalletAccount> createAccounts(List<CoinType> coins, boolean generateAllKeys,
@@ -273,16 +302,46 @@ final public class Wallet {
     /**
      * Generate and add a new BIP44 account for a specific coin type
      */
-    private WalletAccount createAndAddAccount(CoinType coinType, @Nullable KeyParameter key) {
-        checkState(lock.isHeldByCurrentThread(), "Lock is held by another thread");
+    private WalletAccount createAndAddAccountAtPath(CoinType coinType,
+                                                     List<ChildNumber> customPath,
+                                                     @Nullable KeyParameter key) {
         checkNotNull(coinType, "Attempting to create a pocket for a null coin");
 
-        // TODO, currently we support a single account so return the existing account
-        List<WalletAccount> currentAccount = getAccounts(coinType);
-        if (currentAccount.size() > 0) {
-            return currentAccount.get(0);
+        DeterministicHierarchy hierarchy;
+        if (isEncrypted()) {
+            hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+        } else {
+            hierarchy = new DeterministicHierarchy(masterKey);
         }
-        // TODO ///////////////
+        DeterministicKey rootKey = hierarchy.get(customPath, false, true);
+        WalletAccount newPocket;
+        if (coinType instanceof BitFamily) {
+            newPocket = new WalletPocketHD(rootKey, coinType, getKeyCrypter(), key);
+        } else if (coinType instanceof NxtFamily) {
+            newPocket = new NxtFamilyWallet(rootKey, coinType, getKeyCrypter(), key);
+        } else {
+            int idIndex = customPath.isEmpty() ? 0 : customPath.get(customPath.size() - 1).num();
+            if (coinType instanceof EvmFamily) {
+                newPocket = new EvmFamilyWallet(coinType, coinType.getId() + ":" + idIndex, rootKey);
+            } else if (coinType instanceof SolanaFamily) {
+                newPocket = new SolanaFamilyWallet(coinType, coinType.getId() + ":" + idIndex, rootKey);
+            } else if (coinType instanceof CardanoFamily) {
+                newPocket = new CardanoFamilyWallet(coinType, coinType.getId() + ":" + idIndex, rootKey);
+            } else if (coinType instanceof ChiaFamily) {
+                newPocket = new ChiaFamilyWallet(coinType, coinType.getId() + ":" + idIndex, rootKey);
+            } else {
+                throw new UnsupportedCoinTypeException(coinType);
+            }
+        }
+        if (isEncrypted() && newPocket.isEncryptable() && !newPocket.isEncrypted()) {
+            newPocket.encrypt(getKeyCrypter(), key);
+        }
+        addAccount(newPocket);
+        return newPocket;
+    }
+
+    private WalletAccount createAndAddAccount(CoinType coinType, @Nullable KeyParameter key) {
+        checkNotNull(coinType, "Attempting to create a pocket for a null coin");
 
         WalletAccount newPocket;
 
@@ -355,6 +414,24 @@ final public class Wallet {
         }
         addAccount(newPocket);
         return newPocket;
+    }
+
+    /**
+     * Derive the key at an arbitrary full BIP32 path from the master key.
+     * Only works for non-encrypted wallets; returns null for encrypted wallets or on error.
+     */
+    @Nullable
+    public DeterministicKey deriveKeyAtFullPath(List<ChildNumber> fullPath) {
+        lock.lock();
+        try {
+            if (isEncrypted()) return null;
+            DeterministicHierarchy hierarchy = new DeterministicHierarchy(masterKey);
+            return hierarchy.get(fullPath, false, true);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**

@@ -14,6 +14,7 @@ import com.openwallet.wallet.ui.widget.NavDrawerItemView;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_MANAGE_WALLETS;
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_SECTION_TITLE;
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_SEPARATOR;
 
@@ -76,6 +77,7 @@ public class NavDrawerListAdapter extends BaseAdapter {
                 case ITEM_COIN:
                 case ITEM_OVERVIEW:
                 case ITEM_TRADE:
+                case ITEM_MANAGE_WALLETS:
                     row = new NavDrawerItemView(context);
                     break;
                 default:
@@ -94,6 +96,7 @@ public class NavDrawerListAdapter extends BaseAdapter {
             case ITEM_COIN:
             case ITEM_OVERVIEW:
             case ITEM_TRADE:
+            case ITEM_MANAGE_WALLETS:
                 ((NavDrawerItemView) row).setData(item.title, item.iconRes);
                 break;
         }

@@ -46,6 +46,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_COIN;
+import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_MANAGE_WALLETS;
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_OVERVIEW;
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_SECTION_TITLE;
 import static com.openwallet.wallet.ui.NavDrawerItemType.ITEM_TRADE;
@@ -225,6 +226,9 @@ final public class WalletActivity extends BaseWalletActivity implements
             NavDrawerItem.addItem(navDrawerItems, ITEM_COIN, account.getDescriptionOrCoinName(),
                     Constants.COINS_ICONS.get(account.getCoinType()), account.getId());
         }
+        NavDrawerItem.addItem(navDrawerItems, ITEM_SECTION_TITLE, getString(R.string.navigation_drawer_manage));
+        NavDrawerItem.addItem(navDrawerItems, ITEM_MANAGE_WALLETS,
+                getString(R.string.title_activity_manage_wallets), R.drawable.ic_launcher, null);
     }
 
     @Override
@@ -282,6 +286,16 @@ final public class WalletActivity extends BaseWalletActivity implements
     public void onTradeSelected() {
         startActivity(new Intent(WalletActivity.this, TradeActivity.class));
         // Reselect the last item as the trade is a separate activity
+        if (isOverviewVisible) {
+            navDrawerSelectOverview(true);
+        } else {
+            navDrawerSelectAccount(getAccount(lastAccountId), true);
+        }
+    }
+
+    @Override
+    public void onManageWalletsSelected() {
+        startActivity(new Intent(WalletActivity.this, ManageWalletsActivity.class));
         if (isOverviewVisible) {
             navDrawerSelectOverview(true);
         } else {
@@ -614,6 +628,9 @@ final public class WalletActivity extends BaseWalletActivity implements
         } else if (id == R.id.action_sweep_wallet) {
             sweepWallet(null);
             return true;
+        } else if (id == R.id.action_unspent_outputs) {
+            showUnspentOutputs();
+            return true;
         } else if (id == R.id.action_support) {
             sendSupportEmail();
             return true;
@@ -674,6 +691,16 @@ final public class WalletActivity extends BaseWalletActivity implements
             Intent intent = new Intent(this, SweepWalletActivity.class);
             intent.putExtra(Constants.ARG_ACCOUNT_ID, lastAccountId);
             if (key != null) intent.putExtra(Constants.ARG_PRIVATE_KEY, key);
+            startActivity(intent);
+        } else {
+            Toast.makeText(this, R.string.no_wallet_pocket_selected, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showUnspentOutputs() {
+        if (isAccountExists(lastAccountId)) {
+            Intent intent = new Intent(this, UnspentOutputsActivity.class);
+            intent.putExtra(Constants.ARG_ACCOUNT_ID, lastAccountId);
             startActivity(intent);
         } else {
             Toast.makeText(this, R.string.no_wallet_pocket_selected, Toast.LENGTH_LONG).show();

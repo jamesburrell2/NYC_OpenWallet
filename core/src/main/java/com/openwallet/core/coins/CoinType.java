@@ -52,6 +52,8 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
     protected Set<AddressType> supportedAddressTypes =
             Collections.unmodifiableSet(EnumSet.of(AddressType.LEGACY));
     protected String bech32Hrp = null;
+    /** False if SegWit is not yet activated on this coin's network. */
+    protected boolean segwitActivated = true;
 
     private transient MonetaryFormat friendlyFormat;
     private transient MonetaryFormat plainFormat;
@@ -131,6 +133,9 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
 
     public String getBech32Hrp() { return bech32Hrp; }
 
+    /** Returns false if SegWit has not yet activated on this coin's network. */
+    public boolean isSegwitActivated() { return segwitActivated; }
+
     @Nullable
     public MessageFactory getMessagesFactory() {
         return null;
@@ -142,6 +147,16 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
 
     public List<ChildNumber> getBip44Path(int account) {
         String path = String.format(BIP_44_KEY_PATH, bip44Index, account);
+        return HDUtils.parsePath(path);
+    }
+
+    public List<ChildNumber> getBip49Path(int account) {
+        String path = String.format("49H/%dH/%dH", bip44Index, account);
+        return HDUtils.parsePath(path);
+    }
+
+    public List<ChildNumber> getBip84Path(int account) {
+        String path = String.format("84H/%dH/%dH", bip44Index, account);
         return HDUtils.parsePath(path);
     }
 

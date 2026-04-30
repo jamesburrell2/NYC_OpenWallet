@@ -79,7 +79,43 @@
                 android:layout_gravity="center_horizontal"
                 android:orientation="horizontal"
                 android:visibility="gone"
-                android:paddingBottom="8dp" />
+                android:paddingBottom="4dp" />
+
+            <!-- Custom HD path toggle link -->
+            <TextView
+                android:id="@+id/custom_path_toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:text="Custom path ▾"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:paddingTop="2dp"
+                android:paddingBottom="4dp"
+                android:visibility="gone" />
+
+            <!-- Custom HD path input row -->
+            <LinearLayout
+                android:id="@+id/custom_path_row"
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="4dp"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/custom_path_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="m/84&#39;/0&#39;/0&#39;/0/0"
+                    android:inputType="textNoSuggestions"
+                    android:typeface="monospace"
+                    android:textSize="12sp"
+                    android:imeOptions="actionDone"
+                    android:singleLine="true" />
+            </LinearLayout>
 
             <RelativeLayout
                 android:visibility="gone"

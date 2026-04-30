@@ -12,6 +12,10 @@ public class IntroActivity extends AbstractWalletFragmentActivity
         implements WelcomeFragment.Listener, PasswordConfirmationFragment.Listener,
         SetPasswordFragment.Listener, SelectCoinsFragment.Listener {
 
+    public static final String ARG_ADD_NEW_WALLET = "add_new_wallet";
+
+    private boolean isAddNewWallet = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -31,6 +35,7 @@ public class IntroActivity extends AbstractWalletFragmentActivity
                     .setCancelable(false)
                     .create().show();
         } else {
+            isAddNewWallet = getIntent().getBooleanExtra(ARG_ADD_NEW_WALLET, false);
             if (savedInstanceState == null) {
                 getSupportFragmentManager().beginTransaction()
                         .add(R.id.container, new WelcomeFragment())
@@ -53,7 +58,7 @@ public class IntroActivity extends AbstractWalletFragmentActivity
 
     @Override
     public void onCreateNewWallet() {
-        if (getWalletApplication().getWallet() == null) {
+        if (getWalletApplication().getWallet() == null || isAddNewWallet) {
             replaceFragment(new SeedFragment());
         } else {
             new AlertDialog.Builder(this)
@@ -72,7 +77,7 @@ public class IntroActivity extends AbstractWalletFragmentActivity
 
     @Override
     public void onRestoreWallet() {
-        if (getWalletApplication().getWallet() == null) {
+        if (getWalletApplication().getWallet() == null || isAddNewWallet) {
             replaceFragment(RestoreFragment.newInstance());
         } else {
             new AlertDialog.Builder(this)
@@ -116,6 +121,9 @@ public class IntroActivity extends AbstractWalletFragmentActivity
 
     @Override
     public void onCoinSelection(Bundle args) {
+        if (isAddNewWallet) {
+            args.putBoolean(ARG_ADD_NEW_WALLET, true);
+        }
         replaceFragment(FinalizeWalletRestorationFragment.newInstance(args));
     }
 }

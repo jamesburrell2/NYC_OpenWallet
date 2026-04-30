@@ -251,12 +251,22 @@ public class CoinServiceImpl extends Service implements CoinService {
         for (CoinType type : Constants.SUPPORTED_COINS) {
             String userServer = config.getCoinElectrumServer(type);
             if (userServer != null && !userServer.isEmpty()) {
-                int lastColon = userServer.lastIndexOf(':');
+                // Saved format is "host:port:true" or "host:port:false".
+                // Legacy format is "host:port" — infer TLS by port number in that case.
+                String serverStr = userServer;
+                Boolean explicitTls = null;
+                if (serverStr.endsWith(":true")) {
+                    explicitTls = true;
+                    serverStr = serverStr.substring(0, serverStr.length() - 5);
+                } else if (serverStr.endsWith(":false")) {
+                    explicitTls = false;
+                    serverStr = serverStr.substring(0, serverStr.length() - 6);
+                }
+                int lastColon = serverStr.lastIndexOf(':');
                 if (lastColon > 0) {
-                    String host = userServer.substring(0, lastColon);
-                    int port = Integer.parseInt(userServer.substring(lastColon + 1));
-                    // Standard Electrum TLS ports: 50002, 60002
-                    boolean useTls = (port == 50002 || port == 60002);
+                    String host = serverStr.substring(0, lastColon);
+                    int port = Integer.parseInt(serverStr.substring(lastColon + 1));
+                    boolean useTls = explicitTls != null ? explicitTls : (port == 50002 || port == 60002);
                     newClients.addCoinAddress(new CoinAddress(
                         type,
                         new ServerAddress(host, port, useTls),

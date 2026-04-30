@@ -1,5 +1,6 @@
 package com.openwallet.wallet.ui;
 
+import android.os.Bundle;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -19,6 +20,11 @@ import javax.annotation.Nullable;
  * @author John L. Jegutanis
  */
 abstract public class BaseWalletActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+    }
 
     public WalletApplication getWalletApplication() {
         return (WalletApplication) getApplication();
@@ -78,7 +84,21 @@ abstract public class BaseWalletActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        getWalletApplication().touchLastResume();
+        // Show biometric lock if the app was backgrounded longer than LOCK_AFTER_MS,
+        // but only if screen lock is enabled in settings.
+        WalletApplication app = getWalletApplication();
+        if (app.getConfiguration().isScreenLockEnabled()) {
+            long lastStop = app.getLastStop();
+            if (lastStop > 0
+                    && (android.os.SystemClock.elapsedRealtime() - lastStop)
+                            > BiometricLockActivity.LOCK_AFTER_MS) {
+                android.content.Intent lock = new android.content.Intent(this, BiometricLockActivity.class);
+                lock.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(lock);
+            }
+        }
+        app.touchLastResume();
     }
 
     @Override

@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.fragment.app.FragmentManager;
 import androidx.core.app.ShareCompat;
 import androidx.appcompat.app.AppCompatActivity;
@@ -71,8 +73,19 @@ public class UiUtils {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                ClipboardManager clipboard = (ClipboardManager) clipboardService;
+                final ClipboardManager clipboard = (ClipboardManager) clipboardService;
                 clipboard.setPrimaryClip(ClipData.newPlainText("simple text", string));
+                // Clear clipboard after 60 seconds to limit exposure of sensitive data
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            clipboard.clearPrimaryClip();
+                        } else {
+                            clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+                        }
+                    }
+                }, 60_000);
             } else {
                 android.text.ClipboardManager clipboard = (android.text.ClipboardManager) clipboardService;
                 clipboard.setText(string);

@@ -1,39 +1,104 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <Preference android:title="@string/pref_title_exchange_rates" >
-        <intent android:targetPackage="@string/app_package"
-            android:targetClass="com.openwallet.wallet.ui.ExchangeRatesActivity" />
-    </Preference>
+    <!-- ── Display ─────────────────────────────────────────── -->
+    <PreferenceCategory android:title="@string/pref_category_display">
 
-    <Preference android:title="@string/title_activity_transaction_fees" >
-        <intent android:targetPackage="@string/app_package"
-            android:targetClass="com.openwallet.wallet.ui.FeesSettingsActivity" />
-    </Preference>
+        <Preference android:title="@string/pref_title_exchange_rates">
+            <intent android:targetPackage="@string/app_package"
+                android:targetClass="com.openwallet.wallet.ui.ExchangeRatesActivity" />
+        </Preference>
 
-    <Preference android:title="@string/title_activity_coin_servers" >
-        <intent android:targetPackage="@string/app_package"
-            android:targetClass="com.openwallet.wallet.ui.ServerSettingsActivity" />
-    </Preference>
+        <CheckBoxPreference
+            android:key="dark_mode"
+            android:title="@string/pref_title_dark_mode"
+            android:summary="@string/pref_summary_dark_mode"
+            android:defaultValue="false" />
 
-    <Preference android:title="@string/title_activity_show_seed" >
-        <intent android:targetPackage="@string/app_package"
-            android:targetClass="com.openwallet.wallet.ui.ShowSeedActivity" />
-    </Preference>
+        <Preference
+            android:key="language"
+            android:title="@string/pref_title_language"
+            android:summary="@string/pref_summary_language" />
 
-    <Preference android:title="@string/pref_title_restore_wallet" >
-        <intent android:targetPackage="@string/app_package"
-            android:targetClass="com.openwallet.wallet.ui.IntroActivity" />
-    </Preference>
+    </PreferenceCategory>
 
-    <CheckBoxPreference
-        android:key="manual_receiving_addresses"
-        android:title="@string/pref_title_manual_receiving_addresses"
-        android:summary="@string/pref_summary_manual_receiving_addresses"
-        android:defaultValue="false"/>
+    <!-- ── Privacy ──────────────────────────────────────────── -->
+    <PreferenceCategory android:title="@string/pref_category_privacy">
 
-    <Preference android:title="@string/title_activity_debugging" >
+        <CheckBoxPreference
+            android:key="hide_balances"
+            android:title="@string/pref_title_hide_balances"
+            android:summary="@string/pref_summary_hide_balances"
+            android:defaultValue="false" />
+
+        <CheckBoxPreference
+            android:key="screen_lock_enabled"
+            android:title="@string/pref_title_screen_lock"
+            android:summary="@string/pref_summary_screen_lock"
+            android:defaultValue="true" />
+
+    </PreferenceCategory>
+
+    <!-- ── Advanced ─────────────────────────────────────────── -->
+    <PreferenceCategory android:title="@string/pref_category_advanced">
+
+        <Preference android:title="@string/title_activity_transaction_fees">
+            <intent android:targetPackage="@string/app_package"
+                android:targetClass="com.openwallet.wallet.ui.FeesSettingsActivity" />
+        </Preference>
+
+        <Preference android:title="@string/title_activity_coin_servers">
+            <intent android:targetPackage="@string/app_package"
+                android:targetClass="com.openwallet.wallet.ui.ServerSettingsActivity" />
+        </Preference>
+
+        <CheckBoxPreference
+            android:key="manual_receiving_addresses"
+            android:title="@string/pref_title_manual_receiving_addresses"
+            android:summary="@string/pref_summary_manual_receiving_addresses"
+            android:defaultValue="false" />
+
+    </PreferenceCategory>
+
+    <!-- ── Wallet ────────────────────────────────────────────── -->
+    <PreferenceCategory android:title="@string/pref_category_wallet">
+
+        <Preference android:title="@string/title_activity_show_seed">
+            <intent android:targetPackage="@string/app_package"
+                android:targetClass="com.openwallet.wallet.ui.ShowSeedActivity" />
+        </Preference>
+
+        <Preference android:title="@string/pref_title_restore_wallet">
+            <intent android:targetPackage="@string/app_package"
+                android:targetClass="com.openwallet.wallet.ui.IntroActivity" />
+        </Preference>
+
+    </PreferenceCategory>
+
+    <!-- ── Local data ────────────────────────────────────────── -->
+    <PreferenceCategory android:title="@string/pref_category_local_data">
+
+        <Preference
+            android:key="export_transactions"
+            android:title="@string/pref_title_export_transactions"
+            android:summary="@string/pref_summary_export_transactions" />
+
+        <Preference
+            android:key="import_address_book"
+            android:title="@string/pref_title_import_address_book"
+            android:summary="@string/pref_summary_import_address_book" />
+
+        <Preference
+            android:key="export_address_book"
+            android:title="@string/pref_title_export_address_book"
+            android:summary="@string/pref_summary_export_address_book" />
+
+    </PreferenceCategory>
+
+    <!-- ── Debug ─────────────────────────────────────────────── -->
+    <Preference android:title="@string/title_activity_debugging">
         <intent android:targetPackage="@string/app_package"
             android:targetClass="com.openwallet.wallet.ui.DebuggingActivity" />
     </Preference>
+
 </PreferenceScreen>

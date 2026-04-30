@@ -107,25 +107,26 @@ public class ServerClients {
                 return client;
             } else if (type instanceof EvmFamily) {
                 CoinAddress addr = addresses.get(type);
-                String rpcUrl = addr.getAddresses().get(0).toString();
+                // getHost() returns the full HTTPS URL; toString() returns debug format
+                String rpcUrl = addr.getAddresses().get(0).getHost();
                 EvmServerClient client = new EvmServerClient(rpcUrl, type.getBip44Index());
                 connections.put(type, client);
                 return client;
             } else if (type instanceof SolanaFamily) {
                 CoinAddress addr = addresses.get(type);
-                String rpcUrl = addr.getAddresses().get(0).toString();
+                String rpcUrl = addr.getAddresses().get(0).getHost();
                 SolanaServerClient client = new SolanaServerClient(rpcUrl);
                 connections.put(type, client);
                 return client;
             } else if (type instanceof CardanoFamily) {
                 CoinAddress addr = addresses.get(type);
-                String apiUrl = addr.getAddresses().get(0).toString();
+                String apiUrl = addr.getAddresses().get(0).getHost();
                 CardanoServerClient client = new CardanoServerClient(apiUrl, "");
                 connections.put(type, client);
                 return client;
             } else if (type instanceof ChiaFamily) {
                 CoinAddress addr = addresses.get(type);
-                String rpcUrl = addr.getAddresses().get(0).toString();
+                String rpcUrl = addr.getAddresses().get(0).getHost();
                 ChiaServerClient client = new ChiaServerClient(rpcUrl);
                 connections.put(type, client);
                 return client;

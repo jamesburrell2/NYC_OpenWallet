@@ -306,10 +306,8 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
 
     private void updateNoServerBanner() {
         if (noServerBanner == null) return;
-        boolean showBanner = type != null
-                && type.equals(NewYorkCoinMain.get())
-                && config.getNycElectrumServer() == null;
-        noServerBanner.setVisibility(showBanner ? View.VISIBLE : View.GONE);
+        // NYC is always provided via DEFAULT_COINS_SERVERS; no manual config required.
+        noServerBanner.setVisibility(View.GONE);
     }
 
     @Override
@@ -520,21 +518,32 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     public void updateView() {
         if (isRemoving() || isDetached()) return;
 
+        boolean hideBalances = config != null && config.isHideBalances();
+
         if (currentBalance != null) {
-            String newBalanceStr = GenericUtils.formatCoinValue(type, currentBalance,
-                    isFullAmount ? AMOUNT_FULL_PRECISION : AMOUNT_SHORT_PRECISION, AMOUNT_SHIFT);
-            accountBalance.setAmount(newBalanceStr);
+            if (hideBalances) {
+                accountBalance.setAmount(getString(R.string.balance_hidden));
+            } else {
+                String newBalanceStr = GenericUtils.formatCoinValue(type, currentBalance,
+                        isFullAmount ? AMOUNT_FULL_PRECISION : AMOUNT_SHORT_PRECISION, AMOUNT_SHIFT);
+                accountBalance.setAmount(newBalanceStr);
+            }
         }
 
         if (currentBalance != null && exchangeRate != null && getView() != null) {
-            try {
-                Value fiatAmount = exchangeRate.rate.convert(type, currentBalance);
-                accountExchangedBalance.setAmount(GenericUtils.formatFiatValue(fiatAmount));
-                accountExchangedBalance.setSymbol(fiatAmount.type.getSymbol());
-            } catch (Exception e) {
-                // Should not happen
-                accountExchangedBalance.setAmount("");
-                accountExchangedBalance.setSymbol("ERROR");
+            if (hideBalances) {
+                accountExchangedBalance.setAmount(getString(R.string.balance_hidden));
+                accountExchangedBalance.setSymbol("");
+            } else {
+                try {
+                    Value fiatAmount = exchangeRate.rate.convert(type, currentBalance);
+                    accountExchangedBalance.setAmount(GenericUtils.formatFiatValue(fiatAmount));
+                    accountExchangedBalance.setSymbol(fiatAmount.type.getSymbol());
+                } catch (Exception e) {
+                    // Should not happen
+                    accountExchangedBalance.setAmount("");
+                    accountExchangedBalance.setSymbol("ERROR");
+                }
             }
         }
 
