@@ -31,10 +31,10 @@
     <domain-config>
         <domain includeSubdomains="false">electrum.paywith.nyc</domain>
         <pin-set expiration="2027-01-01">
-            <!-- Primary: SPKI hash of the leaf cert (Let's Encrypt, expires 2026-07-20) -->
-            <pin digest="SHA-256">Yce/3wk75/j2IrgpCFwiFZCGnxFB5dAIxjlxmtwgqlk=</pin>
-            <!-- Backup: SPKI hash of the Let's Encrypt E7 intermediate CA -->
-            <pin digest="SHA-256">y7xVm0TVJNahMr2sZydE2jQH8SquXV9yLF9seROHHHU=</pin>
+            <!-- Primary: SPKI hash of the leaf cert (Let's Encrypt RSA, expires 2026-07-29) -->
+            <pin digest="SHA-256">f6nvkA5/JyhWZU55IeHDfyt8+Zg12qR/HFGQ86O1BJw=</pin>
+            <!-- Backup: SPKI hash of the Let's Encrypt R12 intermediate CA -->
+            <pin digest="SHA-256">kZwN96eHtZftBWrOZUsd6cA4es80n3NzSk/XtYz2EqQ=</pin>
         </pin-set>
         <trust-anchors>
             <certificates src="system" />
