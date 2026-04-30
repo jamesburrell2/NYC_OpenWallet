@@ -3,14 +3,39 @@
     Network Security Configuration
     ================================
     - All cleartext traffic is blocked (enforces HTTPS/TLS for all network calls).
-    - Certificate pinning for the NYC ElectrumX server.
-      To rotate the pin: generate the SHA-256 SPKI hash of the new cert with:
-          openssl s_client -connect electrum.paywith.nyc:50002 2>/dev/null \
-              | openssl x509 -pubkey -noout \
-              | openssl pkey -pubin -outform der \
-              | openssl dgst -sha256 -binary \
-              | base64
-      Then replace the pin value below and update backupPin with the previous pin.
+    - Certificate pinning for the NYC ElectrumX server (electrum.paywith.nyc:50002).
+
+    !! CERT RENEWAL CHECKLIST !!
+    The Let's Encrypt leaf cert expires every 90 days. When it is renewed on the VPS:
+
+    1. Regenerate the leaf cert pin:
+           openssl s_client -connect electrum.paywith.nyc:50002 2>/dev/null \
+               | openssl x509 -pubkey -noout \
+               | openssl pkey -pubin -outform DER \
+               | openssl dgst -sha256 -binary \
+               | base64
+       Replace the Primary pin below with the new hash.
+
+    2. Verify the intermediate CA has not changed (R12 as of 2026-07-29):
+           openssl s_client -connect electrum.paywith.nyc:50002 -showcerts 2>/dev/null \
+               | awk '/-----BEGIN CERTIFICATE-----/{i++;if(i==2){p=1}} p{print} /-----END CERTIFICATE-----/{if(p){exit}}' \
+               | openssl x509 -pubkey -noout \
+               | openssl pkey -pubin -outform DER \
+               | openssl dgst -sha256 -binary \
+               | base64
+       Update the Backup pin if the intermediate has rotated.
+
+    3. REBUILD AND REDEPLOY THE APP — the new pins take effect only after users install
+       the updated APK. Users on the old build will see "Pin verification failed" and the
+       NYC wallet will silently fail to sync until they update.
+       Release the new APK before or immediately after renewing the server cert.
+
+    TIP: To decouple cert rotation from app releases, consider pinning only the
+    intermediate CA (keep the Backup pin, drop the Primary leaf pin). The intermediate
+    changes far less frequently than the leaf cert.
+
+    VPS deploy hook: /etc/letsencrypt/renewal-hooks/deploy/electrumx.sh
+    (restarts ElectrumX and fixes ACL permissions on new archive files)
 -->
 <network-security-config>
 
