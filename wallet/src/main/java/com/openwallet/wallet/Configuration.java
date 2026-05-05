@@ -270,17 +270,21 @@ public class Configuration {
      * Returns the user-configured ElectrumX server for the given coin type, or null if none is
      * set (meaning the app will use the built-in DEFAULT_COINS_SERVERS entry).
      *
-     * For NewYorkCoin the legacy "nyc_electrum_server" preference is checked first so that
-     * existing user settings are not lost after this API was generalised.
+     * The generic "coin_server_<id>" key takes precedence so that updates made via
+     * EditServerDialog (which writes to the generic key) are respected immediately.
+     * For NewYorkCoin we fall back to the legacy "nyc_electrum_server" key only when
+     * no generic override is set — this preserves settings saved before this API existed.
      */
     @Nullable
     public String getCoinElectrumServer(CoinType type) {
-        // Backward-compat: NYC was stored under its own dedicated key before this API existed.
+        // Generic key takes priority — EditServerDialog and setCoinElectrumServer write here.
+        String specific = prefs.getString("coin_server_" + type.getId(), null);
+        if (specific != null && !specific.isEmpty()) return specific;
+        // Backward-compat: NYC was stored under its own dedicated key before the generic API.
         if ("newyorkcoin.main".equals(type.getId())) {
-            String legacy = prefs.getString(PREFS_KEY_NYC_ELECTRUM_SERVER, null);
-            if (legacy != null && !legacy.isEmpty()) return legacy;
+            return prefs.getString(PREFS_KEY_NYC_ELECTRUM_SERVER, null);
         }
-        return prefs.getString("coin_server_" + type.getId(), null);
+        return null;
     }
 
     /**
@@ -289,6 +293,11 @@ public class Configuration {
      */
     public void setCoinElectrumServer(CoinType type, String hostPort) {
         SharedPreferences.Editor editor = prefs.edit();
+        // For NYC, also clear the legacy key so getCoinElectrumServer does not fall back
+        // to an outdated value stored under the old dedicated preference key.
+        if ("newyorkcoin.main".equals(type.getId())) {
+            editor.remove(PREFS_KEY_NYC_ELECTRUM_SERVER);
+        }
         if (hostPort == null || hostPort.isEmpty()) {
             editor.remove("coin_server_" + type.getId());
         } else {

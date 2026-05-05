@@ -16,13 +16,17 @@
                | base64
        Replace the Primary pin below with the new hash.
 
-    2. Verify the intermediate CA has not changed (R12 as of 2026-07-29):
+    2. Verify the intermediate CA has not changed (R12 as of 2026-07-29).
+       Extract the second certificate from the chain (the intermediate) and hash its public key:
+
            openssl s_client -connect electrum.paywith.nyc:50002 -showcerts 2>/dev/null \
-               | awk '/-----BEGIN CERTIFICATE-----/{i++;if(i==2){p=1}} p{print} /-----END CERTIFICATE-----/{if(p){exit}}' \
                | openssl x509 -pubkey -noout \
                | openssl pkey -pubin -outform DER \
                | openssl dgst -sha256 -binary \
                | base64
+
+       (Pipe through `sed -n '2p'` or a Python script to isolate cert #2 from the chain output
+       if your openssl version doesn't let you select by index.)
        Update the Backup pin if the intermediate has rotated.
 
     3. REBUILD AND REDEPLOY THE APP — the new pins take effect only after users install
