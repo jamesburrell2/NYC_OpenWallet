@@ -55,6 +55,16 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
         implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** ZIP-317 conventional fee: 5,000 zat marginal fee x 3 logical actions (typical shielded send). */
+    public static final long ZIP317_STANDARD_FEE = 15_000L;
+    /**
+     * Conservative margin for "send all" - covers cross-pool sends (up to 4 actions).
+     * The SDK computes the exact ZIP-317 fee at proposal time, so send-all may leave
+     * up to 5,000 zat behind; exact-fee send-all requires a proposeTransfer round-trip
+     * and is deferred.
+     */
+    public static final long SEND_ALL_FEE_MARGIN = 20_000L;
+
     /** Fallback t-address derived from the BIP-44 HD key — available before SDK init. */
     private final ZcashSdkAddress tAddress;
 
@@ -471,9 +481,10 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
     @Override
     public SendRequest getEmptyWalletRequest(AbstractAddress destination)
             throws WalletAccountException {
-        // "Send all" maps to sending the full spendable balance minus the standard fee (10_000 zat)
+        // "Send all" maps to sending the full spendable balance minus a conservative margin
+        // that covers the exact ZIP-317 fee the SDK will compute at proposal time.
         long spendable = getBalance().getValue();
-        long fee = 10_000L;
+        long fee = SEND_ALL_FEE_MARGIN;
         if (spendable <= fee) {
             throw new WalletAccountException("Insufficient balance to cover the minimum fee");
         }
@@ -501,7 +512,7 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
                 type,
                 pendingId.toString(),
                 amount.getValue(),
-                10_000L,                         // estimated standard fee in zatoshi
+                ZIP317_STANDARD_FEE,              // ZIP-317 conventional fee estimate in zatoshi
                 System.currentTimeMillis(),
                 -1,                              // not yet mined
                 false,                           // outgoing
@@ -518,7 +529,7 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
         // Validate balance (the SDK will enforce this again during proposal, but fail fast here)
         if (request.tx instanceof ZcashSdkTransaction) {
             ZcashSdkTransaction zecTx = (ZcashSdkTransaction) request.tx;
-            long required = zecTx.getValueZatoshi() + 10_000L; // amount + fee
+            long required = zecTx.getValueZatoshi() + ZIP317_STANDARD_FEE; // amount + ZIP-317 fee
             long available = getBalance().getValue();
             if (available < required) {
                 throw new WalletAccountException(String.format(
