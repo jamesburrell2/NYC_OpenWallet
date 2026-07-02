@@ -121,7 +121,27 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
      */
     public void setBackend(ZcashBackendDelegate backend) {
         this.backend = backend;
+        backend.setUpdateListener(new ZcashBackendDelegate.UpdateListener() {
+            @Override
+            public void onBackendUpdated() {
+                notifyBackendUpdated();
+            }
+        });
         backend.startSync();
+    }
+
+    private void notifyBackendUpdated() {
+        final Value newBalance = getBalance();
+        for (final ListenerRegistration reg : listeners) {
+            reg.executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    reg.listener.onNewBalance(newBalance);
+                    reg.listener.onWalletChanged(ZcashSdkWallet.this);
+                }
+            });
+        }
+        if (wallet != null) wallet.saveLater();
     }
 
     @Nullable

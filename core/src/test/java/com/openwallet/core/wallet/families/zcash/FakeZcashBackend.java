@@ -12,6 +12,18 @@ public class FakeZcashBackend implements ZcashBackendDelegate {
     public String lastRecipient;
     public long lastZatoshi;
 
+    @Nullable private UpdateListener updateListener;
+
+    @Override
+    public void setUpdateListener(@Nullable UpdateListener listener) {
+        this.updateListener = listener;
+    }
+
+    /** Test hook: simulate the SDK pushing new data. */
+    public void fireUpdate() {
+        if (updateListener != null) updateListener.onBackendUpdated();
+    }
+
     @Override public void startSync() { }
     @Override public void stopSync() { }
     @Override public String getReceiveAddress() { return "u1" + fill(100); }

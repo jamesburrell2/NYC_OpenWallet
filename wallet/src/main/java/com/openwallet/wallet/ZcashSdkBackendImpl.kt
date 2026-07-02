@@ -53,6 +53,15 @@ class ZcashSdkBackendImpl(
     @Volatile private var connected: Boolean = false
     @Volatile private var loading: Boolean = false
     @Volatile private var syncProgressPercent: Int = 0
+    @Volatile private var updateListener: ZcashBackendDelegate.UpdateListener? = null
+
+    override fun setUpdateListener(listener: ZcashBackendDelegate.UpdateListener?) {
+        updateListener = listener
+    }
+
+    private fun notifyUpdated() {
+        runCatching { updateListener?.onBackendUpdated() }
+    }
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private fun isWalletInitialized() = prefs().getBoolean(KEY_INITIALIZED, false)
@@ -112,6 +121,7 @@ class ZcashSdkBackendImpl(
                             }
                             connected = true
                             loading = false
+                            notifyUpdated()
                         }
                     }
                 }
@@ -119,12 +129,17 @@ class ZcashSdkBackendImpl(
                 launch {
                     sync.transactions.collectLatest { txList ->
                         cachedTransactions = txList.mapNotNull { mapTransaction(it) }
+                        notifyUpdated()
                     }
                 }
 
                 launch {
                     sync.progress.collectLatest { pct ->
-                        syncProgressPercent = (pct.decimal * 100f).toInt().coerceIn(0, 100)
+                        val newPct = (pct.decimal * 100f).toInt().coerceIn(0, 100)
+                        if (newPct != syncProgressPercent) {
+                            syncProgressPercent = newPct
+                            notifyUpdated()
+                        }
                     }
                 }
 
@@ -132,6 +147,7 @@ class ZcashSdkBackendImpl(
                 Log.e(TAG, "Sync startup error: ${e.message}", e)
                 loading = false
                 connected = false
+                notifyUpdated()
             }
         }
     }

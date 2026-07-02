@@ -83,6 +83,19 @@ public interface ZcashBackendDelegate {
      */
     List<ZcashSdkTransaction> getTransactions();
 
+    // ---- Update notifications ------------------------------------------------
+
+    /** Fired by the backend whenever balance, transactions, or connection state change. */
+    interface UpdateListener {
+        void onBackendUpdated();
+    }
+
+    /**
+     * Registers the single listener notified on backend data changes.
+     * Pass null to clear. Called by ZcashSdkWallet.setBackend().
+     */
+    void setUpdateListener(@Nullable UpdateListener listener);
+
     // ---- Sending ------------------------------------------------------------
 
     /**
