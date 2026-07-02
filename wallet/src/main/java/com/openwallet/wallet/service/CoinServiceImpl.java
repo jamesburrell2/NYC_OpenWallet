@@ -232,6 +232,7 @@ public class CoinServiceImpl extends Service implements CoinService {
             } else if (hasEverything && isNetworkChanged) {
                 log.info("Restarting coins clients as network changed");
                 clients.resetConnections();
+                injectZcashBackends(wallet);
             } else if (!hasEverything && clients != null) {
                 log.info("stopping stratum clients");
                 disconnectClients();
@@ -298,7 +299,12 @@ public class CoinServiceImpl extends Service implements CoinService {
         for (WalletAccount account : wallet.getAllAccounts()) {
             if (!(account instanceof ZcashSdkWallet)) continue;
             ZcashSdkWallet zecWallet = (ZcashSdkWallet) account;
-            if (zecWallet.getBackend() != null) continue; // already injected
+            if (zecWallet.getBackend() != null) {
+                // Already injected — restart sync if it was stopped (service restart,
+                // network change). startSync() is a no-op while already running.
+                zecWallet.getBackend().startSync();
+                continue;
+            }
 
             // Find the configured lightwalletd server for this coin type.
             CoinType type = account.getCoinType();
@@ -475,6 +481,7 @@ public class CoinServiceImpl extends Service implements CoinService {
                         }
 
                         if (clients != null) clients.startAsync(account);
+                        injectZcashBackends(wallet);
                     } else {
                         log.warn("Tried to start a service for account id {} but no account found.",
                                 lastAccount);
@@ -496,6 +503,7 @@ public class CoinServiceImpl extends Service implements CoinService {
                     for (WalletAccount account : wallet.getAllAccounts()) {
                         clients.startAsync(account);
                     }
+                    injectZcashBackends(wallet);
                 }
             } else {
                 log.error("Got connect coin intent, but no wallet is available");
