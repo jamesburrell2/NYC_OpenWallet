@@ -61,6 +61,7 @@ class ZcashSdkBackendImpl(
 
     private fun notifyUpdated() {
         runCatching { updateListener?.onBackendUpdated() }
+            .onFailure { Log.w(TAG, "Update listener threw: ${it.javaClass.simpleName}") }
     }
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

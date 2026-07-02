@@ -82,6 +82,9 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
 
     private final CopyOnWriteArrayList<ListenerRegistration> listeners = new CopyOnWriteArrayList<>();
 
+    /** Last balance sent to listeners; used to suppress redundant onNewBalance events. */
+    @Nullable private transient Value lastNotifiedBalance;
+
     // ---- Constructors -------------------------------------------------------
 
     public ZcashSdkWallet(CoinType coinType, String id) {
@@ -132,11 +135,16 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
 
     private void notifyBackendUpdated() {
         final Value newBalance = getBalance();
+        final boolean balanceChanged =
+                lastNotifiedBalance == null || newBalance.compareTo(lastNotifiedBalance) != 0;
+        lastNotifiedBalance = newBalance;
         for (final ListenerRegistration reg : listeners) {
             reg.executor.execute(new Runnable() {
                 @Override
                 public void run() {
-                    reg.listener.onNewBalance(newBalance);
+                    if (balanceChanged) {
+                        reg.listener.onNewBalance(newBalance);
+                    }
                     reg.listener.onWalletChanged(ZcashSdkWallet.this);
                 }
             });
