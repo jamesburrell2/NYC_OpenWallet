@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ class ZcashSdkBackendImpl(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var syncJob: Job? = null
+    @Volatile private var stopJob: Job? = null
 
     @Volatile private var synchronizer: CloseableSynchronizer? = null
     @Volatile private var cachedAccount: Account? = null
@@ -68,9 +70,11 @@ class ZcashSdkBackendImpl(
     private fun isWalletInitialized() = prefs().getBoolean(KEY_INITIALIZED, false)
     private fun markWalletInitialized() = prefs().edit().putBoolean(KEY_INITIALIZED, true).apply()
 
+    // Non-blocking: invoked from the service main thread; all work runs on Dispatchers.IO.
     override fun startSync() {
         if (syncJob?.isActive == true) return
         syncJob = scope.launch {
+            stopJob?.join() // wait for any in-flight teardown before re-creating the synchronizer
             try {
                 loading = true
                 val endpoint = LightWalletEndpoint(primaryHost, primaryPort, isSecure = true)
@@ -154,14 +158,21 @@ class ZcashSdkBackendImpl(
     }
 
     override fun stopSync() {
-        syncJob?.cancel()
+        val jobToStop = syncJob
         syncJob = null
-        synchronizer?.close()
+        val syncToClose = synchronizer
         synchronizer = null
         cachedAccount = null
         cachedSaplingAddress = null
         connected = false
         loading = false
+        // Teardown is async: cancel() alone doesn't wait for the coroutine to finish,
+        // and closing the synchronizer while collectors still run races the SDK.
+        // startSync() joins stopJob before creating a new Synchronizer for the alias.
+        stopJob = scope.launch {
+            jobToStop?.cancelAndJoin()
+            runCatching { syncToClose?.close() }
+        }
     }
 
     override fun getReceiveAddress(): String? = cachedAddress ?: cachedTAddress

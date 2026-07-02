@@ -302,6 +302,7 @@ public class CoinServiceImpl extends Service implements CoinService {
             if (zecWallet.getBackend() != null) {
                 // Already injected — restart sync if it was stopped (service restart,
                 // network change). startSync() is a no-op while already running.
+                log.debug("Restarting ZEC sync for {}", account.getCoinType().getName());
                 zecWallet.getBackend().startSync();
                 continue;
             }
