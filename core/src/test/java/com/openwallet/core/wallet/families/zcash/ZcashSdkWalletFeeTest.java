@@ -9,6 +9,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
+/** Note: {@code ZcashMain.get()} is a process-wide singleton; tests in this class must not mutate its state. */
 public class ZcashSdkWalletFeeTest {
     private final CoinType type = ZcashMain.get();
     private ZcashSdkWallet wallet;
@@ -57,5 +58,13 @@ public class ZcashSdkWalletFeeTest {
         SendRequest req = wallet.getSendToRequest(
                 type.newAddress("t1duiEGg7b39nfQee3XaTY4f5McqfyJKhBi"), type.value(80_000L));
         wallet.completeTransaction(req); // must not throw
+    }
+
+    @Test
+    public void completeAcceptsExactBalanceBoundary() throws Exception {
+        backend.balanceZatoshi = 95_000L; // exactly 80_000 + ZIP317_STANDARD_FEE
+        SendRequest req = wallet.getSendToRequest(
+                type.newAddress("t1duiEGg7b39nfQee3XaTY4f5McqfyJKhBi"), type.value(80_000L));
+        wallet.completeTransaction(req); // strict < check: exact equality must pass
     }
 }
