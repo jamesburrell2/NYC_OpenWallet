@@ -115,3 +115,33 @@
 -dontwarn com.google.errorprone.annotations.**
 # Tink (pulled in by androidx.security:security-crypto) — keep enough for EncryptedSharedPreferences
 -dontwarn com.google.crypto.tink.**
+
+# --------------- gRPC / Guava (missing on Android) ------
+# R8-generated rules from missing_rules.txt
+-dontwarn com.google.common.base.MoreObjects$ToStringHelper
+-dontwarn com.google.common.base.MoreObjects
+-dontwarn com.google.common.base.Verify
+-dontwarn com.google.common.base.VerifyException
+-dontwarn javax.naming.NamingEnumeration
+-dontwarn javax.naming.NamingException
+-dontwarn javax.naming.directory.Attribute
+-dontwarn javax.naming.directory.Attributes
+-dontwarn javax.naming.directory.DirContext
+-dontwarn javax.naming.directory.InitialDirContext
+
+# --------------- kotlinx-serialization (used by zcash-android-sdk / kotlinx-datetime) ------
+-dontwarn kotlinx.serialization.KSerializer
+-dontwarn kotlinx.serialization.Serializable
+
+# --------------- Zcash Android SDK ------
+-keep class cash.z.ecc.android.sdk.** { *; }
+-dontwarn cash.z.ecc.android.sdk.**
+-keep class co.electriccoin.lightwallet.** { *; }
+-dontwarn co.electriccoin.lightwallet.**
+
+# --------------- Kotlinx Coroutines ------
+-dontwarn kotlinx.coroutines.**
+-keep class kotlinx.coroutines.** { *; }
+
+# --------------- Kotlinx Datetime -------
+-dontwarn kotlinx.datetime.**

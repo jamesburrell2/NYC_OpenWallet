@@ -7,6 +7,7 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.3.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22'
 //        classpath 'org.robolectric:robolectric-gradle-plugin:0.11.+'
 
         // NOTE: Do not place your application dependencies here; they belong

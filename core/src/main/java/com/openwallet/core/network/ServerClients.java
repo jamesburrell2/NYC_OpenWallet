@@ -7,6 +7,7 @@ import com.openwallet.core.coins.families.ChiaFamily;
 import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.NxtFamily;
 import com.openwallet.core.coins.families.SolanaFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.exceptions.UnsupportedCoinTypeException;
 import com.openwallet.core.network.families.cardano.CardanoServerClient;
 import com.openwallet.core.network.families.chia.ChiaServerClient;
@@ -14,6 +15,7 @@ import com.openwallet.core.network.families.evm.EvmServerClient;
 import com.openwallet.core.network.families.solana.SolanaServerClient;
 import com.openwallet.core.network.interfaces.BlockchainConnection;
 import com.openwallet.core.wallet.WalletAccount;
+import com.openwallet.core.wallet.families.zcash.ZcashNoopConnection;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +97,13 @@ public class ServerClients {
         if (connections.containsKey(type)) return connections.get(type);
         // Try to create a connection
         if (addresses.containsKey(type)) {
-            if (type instanceof BitFamily) {
+            if (type instanceof ZcashSdkFamily) {
+                // The zcash-android-sdk manages its own lightwalletd gRPC connection.
+                // Return a no-op stub so the rest of the pipeline doesn't throw.
+                ZcashNoopConnection noop = new ZcashNoopConnection();
+                connections.put(type, noop);
+                return noop;
+            } else if (type instanceof BitFamily) {
                 ServerClient client = new ServerClient(addresses.get(type), connectivityHelper);
                 client.setCacheDir(cacheDir, cacheSize);
                 connections.put(type, client);

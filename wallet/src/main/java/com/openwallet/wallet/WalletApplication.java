@@ -22,6 +22,7 @@ import com.openwallet.core.coins.families.CardanoFamily;
 import com.openwallet.core.coins.families.ChiaFamily;
 import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.SolanaFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.exchange.shapeshift.ShapeShift;
 import com.openwallet.core.util.HardwareSoftwareCompliance;
 import com.openwallet.core.wallet.AbstractAddress;
@@ -246,7 +247,8 @@ public class WalletApplication extends Application {
                     boolean isHdFamily = type instanceof EvmFamily
                             || type instanceof SolanaFamily
                             || type instanceof CardanoFamily
-                            || type instanceof ChiaFamily;
+                            || type instanceof ChiaFamily
+                            || type instanceof ZcashSdkFamily;
                     if (isHdFamily && !missing.contains(type)) missing.add(type);
                 }
             } catch (IllegalArgumentException ignored) {

@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
@@ -12,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId "com.newyorkcoin.openwallet"
-        minSdk 26
+        minSdk 27
         targetSdk 34
         versionCode 62
         versionName "v1.8.4"
@@ -32,6 +33,21 @@ android {
             // libscrypt has a pure-Java fallback; excluding allows install on x86_64 emulators
             excludes += ['**/libscrypt.so']
         }
+        resources {
+            // Multiple JARs bundle the same files; pick first occurrence.
+            pickFirsts += ['META-INF/versions/9/previous-compilation-data.bin']
+        }
+    }
+
+    compileOptions {
+        // Required by zcash-android-sdk (uses java.time and other Java 8+ APIs)
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
     }
 
     buildTypes {
@@ -61,14 +77,23 @@ configurations.all {
         force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
         force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
         force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        // zcash-android-sdk pulls in kotlinx-coroutines; pin to a known-good version
+        force 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+        force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+        // protobuf-java (full) supersedes protobuf-javalite; use a single version for both
+        // protobuf-java:3.22.3 still has GeneratedMessage.alwaysUseFieldBuilders (needed by
+        // our protobuf-2.5.0-generated Protos.java) and includes all lite classes (needed by
+        // zcash-android-sdk compiled against protobuf-javalite:4.26.1)
+        force 'com.google.protobuf:protobuf-java:3.22.3'
     }
     // Exclude the standalone listenablefuture artifact that conflicts with full guava
     exclude group: 'com.google.guava', module: 'listenablefuture'
+    // protobuf-java is a strict superset of protobuf-javalite; exclude lite to avoid
+    // duplicate com.google.protobuf.* classes at dex time
+    exclude group: 'com.google.protobuf', module: 'protobuf-javalite'
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation fileTree(dir: '../core/libs', include: ['*.jar'])
     implementation project(':core')
     implementation 'androidx.gridlayout:gridlayout:1.0.0'
     implementation 'androidx.core:core:1.12.0'
@@ -82,7 +107,7 @@ dependencies {
     implementation 'com.google.guava:guava:16.0.1'
     implementation 'com.google.code.findbugs:jsr305:2.0.1'
     implementation 'com.madgag.spongycastle:core:1.51.0.0'
-    implementation 'com.google.protobuf:protobuf-java:2.5.0'
+    implementation 'com.google.protobuf:protobuf-java:3.22.3'
     implementation 'com.google.zxing:core:3.1.0'
     implementation 'ch.acra:acra:4.8.5'
     implementation 'com.jakewharton:butterknife:7.0.1'
@@ -93,4 +118,9 @@ dependencies {
     implementation 'androidx.biometric:biometric:1.1.0'
     // error-prone annotations: Tink references these at compile-time; include so R8 can resolve them (they'll be shrunk out)
     implementation 'com.google.errorprone:error_prone_annotations:2.23.0'
+
+    // ---- Zcash SDK (lightwalletd gRPC sync, shielded + transparent) ----
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    implementation 'cash.z.ecc.android:zcash-android-sdk:2.2.7'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 }

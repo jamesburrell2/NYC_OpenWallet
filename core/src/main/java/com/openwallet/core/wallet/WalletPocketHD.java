@@ -223,8 +223,26 @@ public class WalletPocketHD extends BitWalletBase {
 
     @Override
     public boolean isPayToScriptHashMine(byte[] payToScriptHash) {
-        // Not supported
-        return false;
+        if (!type.getSupportedAddressTypes().contains(AddressType.COMPATIBLE)) {
+            return false;
+        }
+        // For P2SH-P2WPKH (compatibility/BIP49) addresses the redeemScript is
+        // OP_0 PUSH_20 <pubKeyHash>, and the scriptHash = hash160(redeemScript).
+        lock.lock();
+        try {
+            for (DeterministicKey key : keys.getActiveKeys()) {
+                byte[] pubKeyHash = key.getPubKeyHash();
+                byte[] redeemScript = new byte[22];
+                redeemScript[0] = 0x00; // OP_0
+                redeemScript[1] = 0x14; // PUSH 20 bytes
+                System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+                byte[] scriptHash = org.bitcoinj.core.Utils.sha256hash160(redeemScript);
+                if (java.util.Arrays.equals(scriptHash, payToScriptHash)) return true;
+            }
+            return false;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**

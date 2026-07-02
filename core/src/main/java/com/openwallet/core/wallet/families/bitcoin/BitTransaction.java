@@ -155,7 +155,15 @@ public final class BitTransaction implements AbstractTransaction {
         if (isTrimmed) {
             return getValueReceived();
         } else {
-            return type.value(tx.getValueSentToMe(wallet));
+            // Use isOutputMine() instead of getValueSentToMe() so that P2WPKH (native SegWit)
+            // outputs are correctly recognised; bitcoinj 0.12.x predates SegWit.
+            long sum = 0L;
+            for (TransactionOutput output : tx.getOutputs()) {
+                if (wallet.isOutputMine(output)) {
+                    sum += output.getValue().longValue();
+                }
+            }
+            return type.value(sum);
         }
     }
 
@@ -185,7 +193,7 @@ public final class BitTransaction implements AbstractTransaction {
 
                 // The connected output may be the change to the sender of a previous input sent to this wallet. In this
                 // case we ignore it.
-                if (!connected.getOutput().isMineOrWatched(wallet))
+                if (!wallet.isOutputMine(connected.getOutput()))
                     continue;
 
                 sent = sent.add(connected.getValue());
@@ -251,7 +259,18 @@ public final class BitTransaction implements AbstractTransaction {
             try {
                 AbstractAddress address = BitAddress.from(type, output.getScriptPubKey());
                 outputs.add(new AbstractOutput(address, type.value(output.getValue())));
-            } catch (Exception e) { /* ignore this output */ }
+            } catch (Exception e) {
+                // Fall back to SegwitAddress for P2WPKH outputs (OP_0 PUSH_20 <hash160>)
+                try {
+                    byte[] prog = output.getScriptPubKey().getProgram();
+                    if (prog.length == 22 && (prog[0] & 0xff) == 0x00 && (prog[1] & 0xff) == 0x14) {
+                        byte[] hash160 = new byte[20];
+                        System.arraycopy(prog, 2, hash160, 0, 20);
+                        AbstractAddress addr = SegwitAddress.fromHash160(type, hash160);
+                        outputs.add(new AbstractOutput(addr, type.value(output.getValue())));
+                    }
+                } catch (Exception ignored) { /* ignore */ }
+            }
         }
         return outputs;
     }

@@ -49,7 +49,8 @@ public class GenericUtils {
             return addressSplitToGroupsMultilineBech32(address.toString());
         } else if (address instanceof BitAddress) {
             return addressSplitToGroupsMultiline((BitAddress) address);
-        } else if (address instanceof ZcashAddress) {
+        } else if (address instanceof ZcashAddress
+                || address instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkAddress) {
             String s = address.toString();
             int mid = s.length() / 2;
             return s.substring(0, mid) + "\n" + s.substring(mid);

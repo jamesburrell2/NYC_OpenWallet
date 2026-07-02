@@ -8,6 +8,7 @@ import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.SolanaFamily;
 import com.openwallet.core.coins.families.CardanoFamily;
 import com.openwallet.core.coins.families.ChiaFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.protos.Protos;
 import com.openwallet.core.util.KeyUtils;
 import com.openwallet.core.wallet.families.bitcoin.BitTransaction;
@@ -124,7 +125,7 @@ public class WalletProtobufSerializer {
             } else if (account instanceof NxtFamilyWallet) {
                 pocketProto = NxtFamilyWalletProtobufSerializer.toProtobuf((NxtFamilyWallet) account);
             } else {
-                // Skip new families (EVM, Solana, Cardano, Chia) — they are recreated on load
+                // Skip new families (EVM, Solana, Cardano, Chia, ZcashSdk) — they are recreated on load
                 continue;
             }
             walletBuilder.addPockets(pocketProto);
@@ -222,7 +223,8 @@ public class WalletProtobufSerializer {
             } else if (type instanceof NxtFamily) {
                 pocket = nxtPocketSerializer.readWallet(pocketProto, crypter);
             } else if (type instanceof EvmFamily || type instanceof SolanaFamily
-                    || type instanceof CardanoFamily || type instanceof ChiaFamily) {
+                    || type instanceof CardanoFamily || type instanceof ChiaFamily
+                    || type instanceof ZcashSdkFamily) {
                 // New families are recreated in-memory; skip serialized pocket
                 continue;
             } else {

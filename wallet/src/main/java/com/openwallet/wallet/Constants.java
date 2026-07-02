@@ -129,8 +129,8 @@ public class Constants {
             new CoinAddress(PotcoinMain.get(),      new ServerAddress("pot-cce-1.coinomi.net", 5039),
                                                     new ServerAddress("pot-cce-2.coinomi.net", 5039)),
             new CoinAddress(ZcashMain.get(),
-                    new ServerAddress("electrum.z.cash", 50002, true),
-                    new ServerAddress("electrum2.z.cash", 50002, true))
+                    new ServerAddress("zec.rocks", 443, true),
+                    new ServerAddress("zec-node.cakewallet.com", 443, true))
     );
 
     public static final HashMap<CoinType, Integer> COINS_ICONS;

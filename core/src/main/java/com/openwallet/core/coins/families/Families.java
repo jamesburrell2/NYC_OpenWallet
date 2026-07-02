@@ -19,6 +19,7 @@ public enum Families {
     SOLANA("solana"),
     CARDANO("cardano"),
     CHIA("chia"),
+    ZCASH_SDK("zcash_sdk"),
     ;
 
     public final String family;

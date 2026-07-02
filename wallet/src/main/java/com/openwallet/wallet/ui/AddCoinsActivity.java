@@ -14,6 +14,7 @@ import com.openwallet.core.coins.families.CardanoFamily;
 import com.openwallet.core.coins.families.ChiaFamily;
 import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.SolanaFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
 import com.openwallet.wallet.Constants;
@@ -147,7 +148,8 @@ public class AddCoinsActivity extends BaseWalletActivity
             // (these families are not serialized in the wallet protobuf)
             CoinType type = newAccount.getCoinType();
             if (type instanceof EvmFamily || type instanceof SolanaFamily
-                    || type instanceof CardanoFamily || type instanceof ChiaFamily) {
+                    || type instanceof CardanoFamily || type instanceof ChiaFamily
+                    || type instanceof ZcashSdkFamily) {
                 ((WalletApplication) getApplication()).getConfiguration()
                         .addEnabledHdCoinId(type.getId());
             }

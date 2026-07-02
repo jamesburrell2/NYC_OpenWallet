@@ -1,8 +1,8 @@
 package com.openwallet.core.coins;
 
-import com.openwallet.core.coins.families.ZcashFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 
-public class ZcashMain extends ZcashFamily {
+public class ZcashMain extends ZcashSdkFamily {
     private ZcashMain() {
         id = "zcash.main";
 

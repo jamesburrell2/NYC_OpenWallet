@@ -9,6 +9,7 @@ import com.openwallet.core.coins.families.ChiaFamily;
 import com.openwallet.core.coins.families.EvmFamily;
 import com.openwallet.core.coins.families.NxtFamily;
 import com.openwallet.core.coins.families.SolanaFamily;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.exceptions.UnsupportedCoinTypeException;
 import com.openwallet.core.protos.Protos;
 import com.openwallet.core.wallet.families.cardano.CardanoFamilyWallet;
@@ -16,6 +17,7 @@ import com.openwallet.core.wallet.families.chia.ChiaFamilyWallet;
 import com.openwallet.core.wallet.families.evm.EvmFamilyWallet;
 import com.openwallet.core.wallet.families.nxt.NxtFamilyWallet;
 import com.openwallet.core.wallet.families.solana.SolanaFamilyWallet;
+import com.openwallet.core.wallet.families.zcash.ZcashSdkWallet;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -112,6 +114,16 @@ final public class Wallet {
         this.masterKey = masterKey;
         accountsByType = new LinkedHashMap<CoinType, ArrayList<WalletAccount>>();
         accounts = new LinkedHashMap<String, WalletAccount>();
+    }
+
+    /**
+     * Returns the raw 64-byte BIP-39 seed bytes, or null if the wallet was constructed
+     * without a mnemonic (e.g. watch-only or imported from a master key only).
+     * SECURITY: call only from a locked wallet context; zero the array when done.
+     */
+    @Nullable
+    public byte[] getSeedBytes() {
+        return seed != null ? seed.getSeedBytes() : null;
     }
 
     public static List<String> generateMnemonic(int entropyBitsSize) {
@@ -315,7 +327,10 @@ final public class Wallet {
         }
         DeterministicKey rootKey = hierarchy.get(customPath, false, true);
         WalletAccount newPocket;
-        if (coinType instanceof BitFamily) {
+        if (coinType instanceof ZcashSdkFamily) {
+            int idIndex = customPath.isEmpty() ? 0 : customPath.get(customPath.size() - 1).num();
+            newPocket = new ZcashSdkWallet(coinType, coinType.getId() + ":" + idIndex, rootKey);
+        } else if (coinType instanceof BitFamily) {
             newPocket = new WalletPocketHD(rootKey, coinType, getKeyCrypter(), key);
         } else if (coinType instanceof NxtFamily) {
             newPocket = new NxtFamilyWallet(rootKey, coinType, getKeyCrypter(), key);
@@ -345,7 +360,17 @@ final public class Wallet {
 
         WalletAccount newPocket;
 
-        if (coinType instanceof BitFamily) {
+        if (coinType instanceof ZcashSdkFamily) {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            int newIndex = getLastAccountIndex(coinType) + 1;
+            DeterministicKey rootKey = hierarchy.get(coinType.getBip44Path(newIndex), false, true);
+            newPocket = new ZcashSdkWallet(coinType, coinType.getId() + ":" + newIndex, rootKey);
+        } else if (coinType instanceof BitFamily) {
             DeterministicHierarchy hierarchy;
             if (isEncrypted()) {
                 hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));

@@ -14,6 +14,7 @@ import android.os.SystemClock;
 import android.text.format.DateUtils;
 
 import com.openwallet.core.coins.CoinType;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.network.CoinAddress;
 import com.openwallet.core.network.ConnectivityHelper;
 import com.openwallet.core.network.ServerClients;
@@ -21,9 +22,11 @@ import com.openwallet.stratumj.ServerAddress;
 import com.openwallet.core.wallet.AbstractAddress;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
+import com.openwallet.core.wallet.families.zcash.ZcashSdkWallet;
 import com.openwallet.wallet.Configuration;
 import com.openwallet.wallet.Constants;
 import com.openwallet.wallet.WalletApplication;
+import com.openwallet.wallet.ZcashSdkBackendImpl;
 
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
@@ -224,6 +227,7 @@ public class CoinServiceImpl extends Service implements CoinService {
 
                 log.info("Creating coins clients");
                 clients = getServerClients(wallet);
+                injectZcashBackends(wallet);
 //                if (lastAccount != null) clients.startAsync(wallet.getAccount(lastAccount));
             } else if (hasEverything && isNetworkChanged) {
                 log.info("Restarting coins clients as network changed");
@@ -276,6 +280,43 @@ public class CoinServiceImpl extends Service implements CoinService {
             }
         }
         return newClients;
+    }
+
+    /**
+     * Injects a {@link ZcashSdkBackendImpl} into every {@link ZcashSdkWallet} account
+     * that doesn't already have a backend.  Called after ServerClients are ready so the
+     * backend can start its coroutine sync immediately.
+     *
+     * Only operates on unencrypted wallets (seed bytes are required for SDK init).
+     */
+    private void injectZcashBackends(Wallet wallet) {
+        byte[] seedBytes = wallet.getSeedBytes();
+        if (seedBytes == null) {
+            log.info("Skipping ZEC backend injection: wallet has no accessible seed (encrypted?)");
+            return;
+        }
+        for (WalletAccount account : wallet.getAllAccounts()) {
+            if (!(account instanceof ZcashSdkWallet)) continue;
+            ZcashSdkWallet zecWallet = (ZcashSdkWallet) account;
+            if (zecWallet.getBackend() != null) continue; // already injected
+
+            // Find the configured lightwalletd server for this coin type.
+            CoinType type = account.getCoinType();
+            String host = "zec.rocks";
+            int port = 443;
+            for (CoinAddress addr : Constants.DEFAULT_COINS_SERVERS) {
+                if (addr.getType().equals(type) && !addr.getAddresses().isEmpty()) {
+                    host = addr.getAddresses().get(0).getHost();
+                    port = addr.getAddresses().get(0).getPort();
+                    break;
+                }
+            }
+
+            ZcashSdkBackendImpl backend = new ZcashSdkBackendImpl(
+                    this, seedBytes, host, port);
+            zecWallet.setBackend(backend);
+            log.info("Injected ZcashSdkBackend for {}", type.getName());
+        }
     }
 
     private final BroadcastReceiver tickReceiver = new BroadcastReceiver() {

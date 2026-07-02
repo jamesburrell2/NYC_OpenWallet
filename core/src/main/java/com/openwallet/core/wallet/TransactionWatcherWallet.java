@@ -325,7 +325,7 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
         if (isReceiving) {
             int outputIndex = 0;
             for (TransactionOutput output : outputs) {
-                if (output.isMineOrWatched(this)) {
+                if (isOutputMine(output)) {
                     tx.addOutput(outputIndex, output);
                 }
                 outputIndex++;
@@ -341,6 +341,27 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
         simpleAddTransaction(txPool,
                 BitTransaction.fromTrimmed(hash, tx, valueSent, valueReceived, fee));
         return true;
+    }
+
+    /**
+     * Returns true if {@code output} belongs to this wallet.
+     * Extends bitcoinj's {@link TransactionOutput#isMineOrWatched} with P2WPKH (native SegWit)
+     * support, since bitcoinj 0.12.x predates SegWit and cannot recognise those scripts natively.
+     */
+    public boolean isOutputMine(TransactionOutput output) {
+        try {
+            if (output.isMineOrWatched(this)) return true;
+        } catch (Exception ignored) {}
+        // P2WPKH: OP_0 (0x00) PUSH_20 (0x14) <20-byte pubKeyHash> = 22 bytes total
+        try {
+            byte[] prog = output.getScriptPubKey().getProgram();
+            if (prog.length == 22 && (prog[0] & 0xff) == 0x00 && (prog[1] & 0xff) == 0x14) {
+                byte[] pubKeyHash = new byte[20];
+                System.arraycopy(prog, 2, pubKeyHash, 0, 20);
+                return isPubKeyHashMine(pubKeyHash);
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private void removeTransaction(Sha256Hash hash) {
