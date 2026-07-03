@@ -27,6 +27,7 @@ import com.openwallet.wallet.Configuration;
 import com.openwallet.wallet.Constants;
 import com.openwallet.wallet.WalletApplication;
 import com.openwallet.wallet.ZcashSdkBackendImpl;
+import com.openwallet.wallet.util.ZecSeedCache;
 
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
@@ -289,12 +290,18 @@ public class CoinServiceImpl extends Service implements CoinService {
      * that doesn't already have a backend.  Called after ServerClients are ready so the
      * backend can start its coroutine sync immediately.
      *
-     * Only operates on unencrypted wallets (seed bytes are required for SDK init).
+     * Needs the raw seed bytes for SDK init: read directly on unencrypted wallets,
+     * or from the in-memory {@link ZecSeedCache} (populated at password entry) on
+     * encrypted ones.
      */
     private void injectZcashBackends(Wallet wallet) {
         byte[] seedBytes = wallet.getSeedBytes();
         if (seedBytes == null) {
-            log.info("Skipping ZEC backend injection: wallet has no accessible seed (encrypted?)");
+            seedBytes = ZecSeedCache.get();
+        }
+        if (seedBytes == null) {
+            log.info("Skipping ZEC backend injection: wallet locked and no cached seed; "
+                    + "ZEC sync starts after the next password entry");
             return;
         }
         for (WalletAccount account : wallet.getAllAccounts()) {

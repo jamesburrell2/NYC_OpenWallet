@@ -127,6 +127,37 @@ final public class Wallet {
     }
 
     /**
+     * Returns the raw 64-byte BIP-39 seed bytes of an ENCRYPTED wallet by decrypting
+     * the stored mnemonic with the given AES key, without mutating wallet state.
+     * Returns null if the wallet has no seed. Falls back to {@link #getSeedBytes()}
+     * when the seed is not encrypted (the key is then ignored).
+     *
+     * SECURITY: the caller owns the returned array — keep it in memory only, never
+     * persist or log it, and zero it when done.
+     *
+     * @throws org.bitcoinj.crypto.KeyCrypterException if the AES key is wrong
+     * @throws IllegalStateException if the decrypted mnemonic fails BIP-39 validation
+     */
+    @Nullable
+    public byte[] getSeedBytes(KeyParameter aesKey) {
+        lock.lock();
+        try {
+            if (seed == null) return null;
+            if (!seed.isEncrypted()) return seed.getSeedBytes();
+            checkNotNull(aesKey, "AES key required to read an encrypted seed");
+            List<String> mnemonic;
+            try {
+                mnemonic = decodeMnemonicCode(getKeyCrypter().decrypt(seed.getEncryptedData(), aesKey));
+            } catch (UnreadableWalletException e) {
+                throw new IllegalStateException("Stored mnemonic failed BIP-39 validation", e);
+            }
+            return new DeterministicSeed(mnemonic, null, "", 0).getSeedBytes();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Unix-time (seconds) when the master key was created; 0 if unknown.
      * Used by the ZEC backend to estimate a restore birthday height.
      */

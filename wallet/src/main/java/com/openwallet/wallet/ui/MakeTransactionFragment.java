@@ -635,6 +635,29 @@ public class MakeTransactionFragment extends Fragment {
         }
     }
 
+    /**
+     * If the wallet has any Zcash account and no seed is cached yet, decrypt and cache
+     * the seed in memory (ZecSeedCache) so the ZEC SDK backend can start on this
+     * encrypted wallet. Failures are swallowed: caching is best-effort and must never
+     * break the send flow (ZEC sync simply stays paused until the next password entry).
+     */
+    private static void maybeCacheZecSeed(Wallet wallet, org.spongycastle.crypto.params.KeyParameter aesKey) {
+        try {
+            if (com.openwallet.wallet.util.ZecSeedCache.get() != null) return;
+            boolean hasZec = false;
+            for (WalletAccount account : wallet.getAllAccounts()) {
+                if (account instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) {
+                    hasZec = true;
+                    break;
+                }
+            }
+            if (!hasZec) return;
+            com.openwallet.wallet.util.ZecSeedCache.capture(wallet.getSeedBytes(aesKey));
+        } catch (Exception e) {
+            log.warn("Could not cache ZEC seed after unlock: {}", e.getClass().getSimpleName());
+        }
+    }
+
     private class SignAndBroadcastTask extends AsyncTask<Void, Void, Exception> {
         @Override
         protected void onPreExecute() {
@@ -655,6 +678,11 @@ public class MakeTransactionFragment extends Fragment {
                     }
                     request.signTransaction = true;
                     sourceAccount.completeAndSignTx(request);
+                    // Signing succeeded, so the password was correct: opportunistically
+                    // cache the seed for the ZEC SDK backend (no-op without ZEC accounts).
+                    if (request.aesKey != null) {
+                        maybeCacheZecSeed(wallet, request.aesKey);
+                    }
                 }
 
                 // Before broadcasting, check if there is an error, like the trade expiration

@@ -3,8 +3,10 @@ package com.openwallet.wallet.tasks;
 import android.os.AsyncTask;
 
 import com.openwallet.core.coins.CoinType;
+import com.openwallet.core.coins.families.ZcashSdkFamily;
 import com.openwallet.core.wallet.Wallet;
 import com.openwallet.core.wallet.WalletAccount;
+import com.openwallet.wallet.util.ZecSeedCache;
 
 import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.HDUtils;
@@ -73,6 +75,13 @@ public final class AddCoinTask extends AsyncTask<Void, Void, Void> {
                 newAccount.setDescription(description);
             }
             wallet.saveNow();
+
+            // The user just proved their password: cache the decrypted seed in memory
+            // so the ZEC SDK backend can start on this encrypted wallet. No-op for
+            // unencrypted wallets (the service reads the seed directly).
+            if (key != null && type instanceof ZcashSdkFamily) {
+                ZecSeedCache.capture(wallet.getSeedBytes(key));
+            }
         } catch (Exception e) {
             exception = e;
         }
