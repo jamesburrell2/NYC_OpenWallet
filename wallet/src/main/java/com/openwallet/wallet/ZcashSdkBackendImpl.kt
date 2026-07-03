@@ -84,17 +84,21 @@ class ZcashSdkBackendImpl(
     }
 
     private suspend fun estimateBirthday(isRestore: Boolean): BlockHeight? {
+        val floor = ZcashNetwork.Mainnet.saplingActivationHeight.value
         val checkpoint = runCatching {
             BlockHeight.ofLatestCheckpoint(context, ZcashNetwork.Mainnet)
-        }.getOrNull() ?: return null
-        if (!isRestore) return checkpoint
-        val floor = ZcashNetwork.Mainnet.saplingActivationHeight.value
-        if (seedCreationTimeSeconds <= 0L) {
-            // Unknown seed age: scan the full shielded history (slow but correct).
+        }.getOrNull()
+        if (!isRestore) return checkpoint // new wallet: tip (null lets the SDK pick its default)
+        if (seedCreationTimeSeconds <= 0L || checkpoint == null) {
+            // Unknown seed age (or no checkpoint available): scan the full shielded history.
             return BlockHeight.new(floor)
         }
         val ageSeconds = System.currentTimeMillis() / 1000L - seedCreationTimeSeconds
-        if (ageSeconds <= 0) return checkpoint
+        if (ageSeconds <= 0) {
+            // Device clock is behind the recorded creation time: degrade to the safe full scan,
+            // never to the tip (which would silently skip the wallet's history).
+            return BlockHeight.new(floor)
+        }
         val blocksBack = ageSeconds / ZCASH_BLOCK_TIME_SECONDS
         return BlockHeight.new(maxOf(checkpoint.value - blocksBack, floor))
     }
@@ -114,15 +118,26 @@ class ZcashSdkBackendImpl(
                 val storedFp = prefs().getString(KEY_SEED_FP, null)
                 if (storedFp != null && storedFp != fp) {
                     Log.i(TAG, "Seed changed since last init; erasing ZEC SDK database")
-                    runCatching {
+                    val eraseFailed = runCatching {
                         Synchronizer.erase(appContext = context,
                             network = ZcashNetwork.Mainnet, alias = SDK_ALIAS)
+                    }.onFailure {
+                        Log.e(TAG, "Failed to erase stale ZEC DB before reinit", it)
+                    }.isFailure
+                    if (eraseFailed) {
+                        // Fail closed: initializing over a stale DB for a different seed
+                        // risks a corrupted balance/tx view. Retry on the next startSync().
+                        loading = false
+                        connected = false
+                        notifyUpdated()
+                        return@launch
                     }
                     prefs().edit().clear().apply()
                 }
 
                 val alreadyInitialized = isWalletInitialized()
                 // creation time 0 = restored/unknown age; recent (<1 day) = genuinely new wallet
+                // >1 day old and never seen by the SDK: an existing wallet adding ZEC, not a fresh one
                 val isRestore = seedCreationTimeSeconds <= 0L ||
                         (System.currentTimeMillis() / 1000L - seedCreationTimeSeconds) > ONE_DAY_SECONDS
                 val initMode = when {
