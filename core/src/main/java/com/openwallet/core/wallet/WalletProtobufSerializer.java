@@ -197,7 +197,11 @@ public class WalletProtobufSerializer {
 
             if (key.hasSecretBytes()) {
                 List<String> mnemonic = Splitter.on(" ").splitToList(key.getSecretBytes().toStringUtf8());
-                seed = new DeterministicSeed(new byte[16], mnemonic, 0);
+                // Re-derive the real 64-byte BIP-39 seed from the mnemonic. The previous
+                // dummy reconstruction (new byte[16] placeholder) left getSeedBytes()
+                // unusable after every reload, which permanently disabled the Zcash SDK
+                // backend (it needs the true seed bytes).
+                seed = new DeterministicSeed(mnemonic, null, "", 0);
             } else if (key.hasEncryptedData()) {
                 EncryptedData data = new EncryptedData(key.getEncryptedData().getInitialisationVector().toByteArray(),
                         key.getEncryptedData().getEncryptedPrivateKey().toByteArray());

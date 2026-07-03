@@ -856,7 +856,9 @@ final public class Wallet {
                 } catch (UnreadableWalletException e) {
                     throw new RuntimeException(e);
                 }
-                seed = new DeterministicSeed(new byte[16], mnemonic, 0);
+                // Re-derive the true BIP-39 seed so getSeedBytes() stays usable after
+                // unlock (the Zcash SDK backend needs the real 64-byte seed).
+                seed = new DeterministicSeed(mnemonic, null, "", 0);
             }
 
             masterKey = masterKey.decrypt(getKeyCrypter(), aesKey);
