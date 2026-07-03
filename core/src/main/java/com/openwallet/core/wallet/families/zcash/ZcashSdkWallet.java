@@ -189,6 +189,36 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
         return tAddress;
     }
 
+    /** Unified Address (u1…), or null until the SDK backend has derived it. */
+    @Nullable
+    public ZcashSdkAddress getUnifiedAddress() {
+        if (backend != null) {
+            String ua = backend.getReceiveAddress();
+            if (ua != null && !ua.isEmpty()) return new ZcashSdkAddress(type, ua);
+        }
+        return null;
+    }
+
+    /** Transparent t-address: SDK-derived when available, BIP-44 fallback otherwise. */
+    @Nullable
+    public ZcashSdkAddress getTransparentAddress() {
+        if (backend != null) {
+            String ta = backend.getTransparentAddress();
+            if (ta != null && !ta.isEmpty()) return new ZcashSdkAddress(type, ta);
+        }
+        return tAddress.toString().isEmpty() ? null : tAddress;
+    }
+
+    /** Shielded Sapling address (zs1…), or null until the SDK backend has derived it. */
+    @Nullable
+    public ZcashSdkAddress getShieldedAddress() {
+        if (backend != null) {
+            String zs = backend.getSaplingAddress();
+            if (zs != null && !zs.isEmpty()) return new ZcashSdkAddress(type, zs);
+        }
+        return null;
+    }
+
     @Override
     public ZcashSdkAddress getChangeAddress() {
         return getReceiveAddress();

@@ -97,6 +97,13 @@ public class AddressRequestFragment extends WalletFragment {
     private WalletAccount account;
     private String message;
 
+    // Zcash receive-address type selection (session-scoped, defaults to Unified)
+    private static final String ZEC_TYPE_UNIFIED = "unified";
+    private static final String ZEC_TYPE_TRANSPARENT = "transparent";
+    private static final String ZEC_TYPE_SHIELDED = "shielded";
+    private String selectedZecAddressType = ZEC_TYPE_UNIFIED;
+    private RadioButton[] zecTypeButtons;
+
     @Bind(R.id.request_address_label) TextView addressLabelView;
     @Bind(R.id.request_address) TextView addressView;
     @Bind(R.id.request_coin_amount) AmountEditView sendCoinAmountView;
@@ -260,6 +267,41 @@ public class AddressRequestFragment extends WalletFragment {
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                 @Override public void afterTextChanged(Editable s) { updateView(); }
             });
+        } else if (account instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) {
+            // Zcash: Unified / Transparent / Shielded selector. Reuses the SegWit tab
+            // strip styling; buttons for address types the SDK hasn't derived yet are
+            // disabled and re-enabled by updateView() once sync starts.
+            addressTypeRadioGroup.setVisibility(View.VISIBLE);
+            final String[] zecTags = { ZEC_TYPE_UNIFIED, ZEC_TYPE_TRANSPARENT, ZEC_TYPE_SHIELDED };
+            final String[] zecLabels = {
+                    getString(R.string.address_type_zec_unified),
+                    getString(R.string.address_type_zec_transparent),
+                    getString(R.string.address_type_zec_shielded) };
+            zecTypeButtons = new RadioButton[zecTags.length];
+            for (int i = 0; i < zecTags.length; i++) {
+                RadioButton btn = new RadioButton(getActivity());
+                btn.setId(View.generateViewId());
+                btn.setText(zecLabels[i]);
+                btn.setTag(zecTags[i]);
+                btn.setLayoutParams(new RadioGroup.LayoutParams(
+                        RadioGroup.LayoutParams.WRAP_CONTENT,
+                        RadioGroup.LayoutParams.WRAP_CONTENT));
+                btn.setButtonDrawable(android.R.color.transparent);
+                btn.setBackgroundResource(R.drawable.address_tab_selector);
+                btn.setTextColor(getResources().getColorStateList(R.color.address_tab_text_selector));
+                btn.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                btn.setTextSize(13f);
+                if (zecTags[i].equals(selectedZecAddressType)) btn.setChecked(true);
+                zecTypeButtons[i] = btn;
+                addressTypeRadioGroup.addView(btn);
+            }
+            addressTypeRadioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+                View checkedBtn = group.findViewById(checkedId);
+                if (checkedBtn != null && checkedBtn.getTag() instanceof String) {
+                    selectedZecAddressType = (String) checkedBtn.getTag();
+                    updateView();
+                }
+            });
         }
 
         AmountEditView sendLocalAmountView = ButterKnife.findById(view, R.id.request_local_amount);
@@ -388,6 +430,11 @@ public class AddressRequestFragment extends WalletFragment {
         amountCalculatorLink.setExchangeRate((ExchangeRate) exchangeRate);
     }
 
+    private static void setZecButtonAvailable(RadioButton btn, boolean available) {
+        btn.setEnabled(available);
+        btn.setAlpha(available ? 1f : 0.4f);
+    }
+
     @Override
     public void updateView() {
         if (isRemoving() || isDetached()) return;
@@ -402,6 +449,31 @@ public class AddressRequestFragment extends WalletFragment {
                 customPathToggle.setVisibility(View.GONE);
                 customPathRow.setVisibility(View.GONE);
                 derivationPathView.setVisibility(View.GONE);
+            }
+        } else if (account instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) {
+            com.openwallet.core.wallet.families.zcash.ZcashSdkWallet zec =
+                    (com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) account;
+            AbstractAddress unified = zec.getUnifiedAddress();
+            AbstractAddress transparent = zec.getTransparentAddress();
+            AbstractAddress shielded = zec.getShieldedAddress();
+
+            if (zecTypeButtons != null) {
+                setZecButtonAvailable(zecTypeButtons[0], unified != null);
+                setZecButtonAvailable(zecTypeButtons[1], transparent != null);
+                setZecButtonAvailable(zecTypeButtons[2], shielded != null);
+            }
+
+            if (ZEC_TYPE_TRANSPARENT.equals(selectedZecAddressType)) {
+                receiveAddress = transparent;
+            } else if (ZEC_TYPE_SHIELDED.equals(selectedZecAddressType)) {
+                receiveAddress = shielded;
+            } else {
+                receiveAddress = unified;
+            }
+            if (receiveAddress == null) {
+                // Selected type not derived yet (SDK backend still starting): show the
+                // best available address rather than an empty screen.
+                receiveAddress = account.getReceiveAddress();
             }
         } else {
             AbstractAddress legacyAddr = account.getReceiveAddress();
