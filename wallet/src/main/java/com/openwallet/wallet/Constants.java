@@ -67,7 +67,10 @@ public class Constants {
     public static final int PERMISSIONS_REQUEST_CAMERA = 0;
 
     public static final String WALLET_FILENAME_PROTOBUF = "wallet";
-    public static final long WALLET_WRITE_DELAY = 5;
+    // Coalesce wallet autosaves: serialization holds the wallet lock and blocks the
+    // UI thread's account reads; at 5s the save ran nearly continuously whenever an
+    // ElectrumX connection bounced and re-subscribed every address (ANR).
+    public static final long WALLET_WRITE_DELAY = 30;
     public static final TimeUnit WALLET_WRITE_DELAY_UNIT = TimeUnit.SECONDS;
 
     public static final long STOP_SERVICE_AFTER_IDLE_SECS = 30 * 60; // 30 mins
