@@ -478,8 +478,10 @@ public class AddressRequestFragment extends WalletFragment {
             }
         }
 
-        // Don't show previous addresses link if we are showing a specific address
-        if (showAddress == null && account.hasUsedAddresses()) {
+        // Don't show previous addresses link if we are showing a specific address,
+        // or if the account isn't a WalletPocketHD (e.g. Zcash accounts don't support
+        // the previous-addresses view)
+        if (showAddress == null && account instanceof WalletPocketHD && account.hasUsedAddresses()) {
             previousAddressesLink.setVisibility(View.VISIBLE);
         } else {
             previousAddressesLink.setVisibility(View.GONE);

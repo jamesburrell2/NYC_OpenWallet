@@ -23,6 +23,7 @@ import com.openwallet.core.coins.Value;
 import com.openwallet.core.exceptions.AddressMalformedException;
 import com.openwallet.core.wallet.families.bitcoin.BitAddress;
 import com.openwallet.core.wallet.families.bitcoin.BitSendRequest;
+import com.openwallet.core.wallet.families.bitcoin.SegwitAddress;
 
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.InsufficientMoneyException;
@@ -99,10 +100,19 @@ abstract public class BitWalletBase extends TransactionWatcherWallet implements 
 
     @Override
     public boolean isAddressMine(AbstractAddress address) {
-        return address != null && address.getType().equals(type) &&
-                (isP2SHAddress(address) ?
-                        isPayToScriptHashMine(getHash160(address)) :
-                        isPubKeyHashMine(getHash160(address)));
+        if (address == null || !address.getType().equals(type)) {
+            return false;
+        }
+        // SegwitAddress (P2WPKH) is not a BitAddress, so it can't go through the
+        // isP2SHAddress()/getHash160() helpers below, which require a BitAddress.
+        // A P2WPKH address's hash160 is a pubkey hash, so ownership is checked the
+        // same way as a legacy pubkey-hash address.
+        if (address instanceof SegwitAddress) {
+            return isPubKeyHashMine(((SegwitAddress) address).getHash160());
+        }
+        return isP2SHAddress(address) ?
+                isPayToScriptHashMine(getHash160(address)) :
+                isPubKeyHashMine(getHash160(address));
     }
 
     @Override

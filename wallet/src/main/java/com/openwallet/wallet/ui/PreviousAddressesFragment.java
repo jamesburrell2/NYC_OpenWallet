@@ -82,11 +82,12 @@ public class PreviousAddressesFragment extends Fragment {
         }
         WalletApplication walletApplication = (WalletApplication) getActivity().getApplication();
         // TODO
-        pocket = (WalletPocketHD) walletApplication.getAccount(accountId);
-        if (pocket == null) {
+        Object account = walletApplication.getAccount(accountId);
+        if (!(account instanceof WalletPocketHD)) {
             Toast.makeText(getActivity(), R.string.no_such_pocket_error, Toast.LENGTH_LONG).show();
             return;
         }
+        pocket = (WalletPocketHD) account;
         type = pocket.getCoinType();
     }
 
@@ -95,6 +96,10 @@ public class PreviousAddressesFragment extends Fragment {
                              Bundle savedInstanceState) {
 
         View view = inflater.inflate(R.layout.fragment_previous_addresses, container, false);
+
+        if (pocket == null) {
+            return view;
+        }
 
         final ListView previousAddresses = (ListView) view.findViewById(R.id.previous_addresses);
 
