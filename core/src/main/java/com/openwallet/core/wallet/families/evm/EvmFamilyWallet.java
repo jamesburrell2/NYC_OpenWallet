@@ -63,17 +63,12 @@ public class EvmFamilyWallet extends AbstractWallet<EvmTransaction, EvmAddress>
 
     public EvmFamilyWallet(CoinType coinType, String id, DeterministicKey rootKey) {
         super(coinType, id);
-        this.balance = coinType.value(0);
-        // Derive EVM address from public key: take last 20 bytes of SHA256(pubkey)
-        byte[] pubKey = rootKey.getPubKey();
-        byte[] hash = Sha256Hash.create(pubKey).getBytes();
-        byte[] addr = new byte[20];
-        System.arraycopy(hash, 12, addr, 0, 20);
-        try {
-            this.address = EvmAddress.fromBytes(coinType, addr);
-        } catch (AddressMalformedException e) {
-            throw new RuntimeException("Failed to derive EVM address", e);
-        }
+        // FAIL CLOSED: Ethereum addresses require Keccak-256 of the uncompressed public
+        // key. The previous SHA-256-based derivation produced addresses with no spendable
+        // key — funds sent to them would be lost. Refuse to construct until a correct
+        // Keccak-256 derivation is implemented.
+        throw new UnsupportedOperationException(
+                "EVM key-based address derivation not implemented (requires Keccak-256)");
     }
 
     public EvmFamilyWallet(CoinType coinType, String id, String addressStr) throws AddressMalformedException {
