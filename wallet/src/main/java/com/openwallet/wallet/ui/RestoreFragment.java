@@ -205,6 +205,9 @@ public class RestoreFragment extends Fragment {
                 args.putString(Constants.ARG_SEED_PASSWORD, bip39Passphrase.getText().toString());
             }
             args.putString(Constants.ARG_SEED, mnemonicTextView.getText().toString().trim());
+            // A genuine restore (no pre-supplied seed) means the seed's age is unknown:
+            // chain scanners must scan full history instead of starting at the chain tip.
+            args.putBoolean(Constants.ARG_RESTORED_WALLET, !isNewSeed);
             if (listener != null) listener.onSeedVerified(args);
         }
     }

@@ -43,6 +43,7 @@ public class Constants {
     public static final String ARG_SEED = "seed";
     public static final String ARG_PASSWORD = "password";
     public static final String ARG_SEED_PASSWORD = "seed_password";
+    public static final String ARG_RESTORED_WALLET = "restored_wallet";
     public static final String ARG_EMPTY_WALLET = "empty_wallet";
     public static final String ARG_SEND_TO_ADDRESS = "send_to_address";
     public static final String ARG_SEND_TO_COIN_TYPE = "send_to_coin_type";

@@ -88,12 +88,15 @@ class ZcashSdkBackendImpl(
             BlockHeight.ofLatestCheckpoint(context, ZcashNetwork.Mainnet)
         }.getOrNull() ?: return null
         if (!isRestore) return checkpoint
+        val floor = ZcashNetwork.Mainnet.saplingActivationHeight.value
+        if (seedCreationTimeSeconds <= 0L) {
+            // Unknown seed age: scan the full shielded history (slow but correct).
+            return BlockHeight.new(floor)
+        }
         val ageSeconds = System.currentTimeMillis() / 1000L - seedCreationTimeSeconds
         if (ageSeconds <= 0) return checkpoint
         val blocksBack = ageSeconds / ZCASH_BLOCK_TIME_SECONDS
-        val target = checkpoint.value - blocksBack
-        val floor = ZcashNetwork.Mainnet.saplingActivationHeight.value
-        return BlockHeight.new(maxOf(target, floor))
+        return BlockHeight.new(maxOf(checkpoint.value - blocksBack, floor))
     }
 
     // Non-blocking: invoked from the service main thread; all work runs on Dispatchers.IO.
@@ -119,9 +122,8 @@ class ZcashSdkBackendImpl(
                 }
 
                 val alreadyInitialized = isWalletInitialized()
-                // A seed older than a day that the SDK has never seen is a restore,
-                // not a brand-new wallet — scan history from an estimated birthday.
-                val isRestore = seedCreationTimeSeconds > 0L &&
+                // creation time 0 = restored/unknown age; recent (<1 day) = genuinely new wallet
+                val isRestore = seedCreationTimeSeconds <= 0L ||
                         (System.currentTimeMillis() / 1000L - seedCreationTimeSeconds) > ONE_DAY_SECONDS
                 val initMode = when {
                     alreadyInitialized -> WalletInitMode.ExistingWallet

@@ -135,6 +135,16 @@ final public class Wallet {
         return masterKey.getCreationTimeSeconds();
     }
 
+    /**
+     * Marks the seed as restored from a backup: creation time becomes 0 (unknown),
+     * so chain scanners must assume full history. Note: creation time is not
+     * round-tripped by the wallet protobuf; deserialized master keys read 0 anyway,
+     * which matches the "unknown, scan everything" semantics.
+     */
+    public void markSeedAsRestored() {
+        if (masterKey != null) masterKey.setCreationTimeSeconds(0);
+    }
+
     public static List<String> generateMnemonic(int entropyBitsSize) {
         byte[] entropy;
         if (ENTROPY_SIZE_DEBUG > 0) {

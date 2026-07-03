@@ -78,7 +78,8 @@ public class FinalizeWalletRestorationFragment extends Fragment {
 
             if (walletFromSeedTask == null) {
                 boolean addNewWallet = args.getBoolean(IntroActivity.ARG_ADD_NEW_WALLET, false);
-                walletFromSeedTask = new WalletFromSeedTask(handler, app, coinsToCreate, seed, password, seedPassword, addNewWallet);
+                boolean restoredWallet = args.getBoolean(Constants.ARG_RESTORED_WALLET, false);
+                walletFromSeedTask = new WalletFromSeedTask(handler, app, coinsToCreate, seed, password, seedPassword, addNewWallet, restoredWallet);
                 walletFromSeedTask.execute();
             } else {
                 switch (walletFromSeedTask.getStatus()) {
@@ -126,11 +127,12 @@ public class FinalizeWalletRestorationFragment extends Fragment {
         private final String password;
         @Nullable private final String seedPassword;
         private final boolean addNewWallet;
+        private final boolean restoredWallet;
         Handler handler;
         private final WalletApplication walletApplication;
         private final List<CoinType> coinsToCreate;
 
-        public WalletFromSeedTask(Handler handler, WalletApplication walletApplication, List<CoinType> coinsToCreate, String seed, String password, @Nullable String seedPassword, boolean addNewWallet) {
+        public WalletFromSeedTask(Handler handler, WalletApplication walletApplication, List<CoinType> coinsToCreate, String seed, String password, @Nullable String seedPassword, boolean addNewWallet, boolean restoredWallet) {
             this.handler = handler;
             this.walletApplication = walletApplication;
             this.coinsToCreate = coinsToCreate;
@@ -138,6 +140,7 @@ public class FinalizeWalletRestorationFragment extends Fragment {
             this.password = password;
             this.seedPassword = seedPassword;
             this.addNewWallet = addNewWallet;
+            this.restoredWallet = restoredWallet;
         }
 
         protected Wallet doInBackground(Void... params) {
@@ -160,6 +163,9 @@ public class FinalizeWalletRestorationFragment extends Fragment {
                     walletApplication.setEmptyWallet();
                 }
                 wallet = new Wallet(seedWords, seedPassword);
+                // A restored seed has unknown age: clear the master key creation time so
+                // chain scanners (e.g. the ZEC SDK backend) scan full history.
+                if (restoredWallet) wallet.markSeedAsRestored();
                 KeyParameter aesKey = null;
                 if (password != null && !password.isEmpty()) {
                     KeyCrypterScrypt crypter = new KeyCrypterScrypt();
