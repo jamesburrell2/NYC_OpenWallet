@@ -222,6 +222,9 @@ class ZcashSdkBackendImpl(
             cachedTAddress = sync.getTransparentAddress(account)
             cachedSaplingAddress = runCatching { sync.getSaplingAddress(account) }.getOrNull()
             Log.d(TAG, "Addresses derived: ua=${cachedAddress != null} t=${cachedTAddress != null} sapling=${cachedSaplingAddress != null}")
+            // Address availability is user-visible state (receive screen enables the
+            // Unified/Shielded tabs from it) — don't wait for the first balance emission.
+            notifyUpdated()
         }
 
         return sync
@@ -288,7 +291,9 @@ class ZcashSdkBackendImpl(
         }
     }
 
-    override fun getReceiveAddress(): String? = cachedAddress ?: cachedTAddress
+    // Pure Unified Address; callers (ZcashSdkWallet) handle the t-address fallback so
+    // the receive screen's "Unified" tab never silently shows a transparent address.
+    override fun getReceiveAddress(): String? = cachedAddress
     override fun getTransparentAddress(): String? = cachedTAddress
     override fun getSaplingAddress(): String? = cachedSaplingAddress
     override fun getBalanceZatoshi(): Long = cachedBalance
