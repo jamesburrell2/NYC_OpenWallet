@@ -165,7 +165,10 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
                 }
             });
         }
-        if (wallet != null) wallet.saveLater();
+        // Deliberately NO wallet.saveLater() here: nothing persistable changes on
+        // backend updates (balance/txs live in the SDK's own database), and during the
+        // initial scan a save per update kept the wallet lock busy serializing every
+        // other account's tx history — starving the UI thread into ANRs.
     }
 
     @Nullable

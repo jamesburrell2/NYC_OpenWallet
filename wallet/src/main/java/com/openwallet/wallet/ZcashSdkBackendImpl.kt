@@ -235,20 +235,27 @@ class ZcashSdkBackendImpl(
         launch {
             sync.walletBalances.collectLatest { balances ->
                 if (balances != null) {
-                    cachedBalance = balances.values.sumOf { b ->
+                    val newBalance = balances.values.sumOf { b ->
                         b.sapling.total.value + b.orchard.total.value + b.unshielded.value
                     }
+                    // Only notify on actual change: during the initial scan the SDK emits
+                    // this flow per block batch; unconditional notifications flooded the
+                    // UI thread and the wallet autosave lock (ANR).
+                    val changed = newBalance != cachedBalance || !connected || loading
+                    cachedBalance = newBalance
                     connected = true
                     loading = false
-                    notifyUpdated()
+                    if (changed) notifyUpdated()
                 }
             }
         }
 
         launch {
             sync.transactions.collectLatest { txList ->
-                cachedTransactions = txList.mapNotNull { mapTransaction(it) }
-                notifyUpdated()
+                val mapped = txList.mapNotNull { mapTransaction(it) }
+                val changed = mapped.size != cachedTransactions.size
+                cachedTransactions = mapped
+                if (changed) notifyUpdated()
             }
         }
 
