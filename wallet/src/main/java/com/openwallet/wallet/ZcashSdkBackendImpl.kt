@@ -32,6 +32,7 @@ class ZcashSdkBackendImpl(
     private val seedBytes: ByteArray,
     private val primaryHost: String = "zec.rocks",
     private val primaryPort: Int = 443,
+    private val seedCreationTimeSeconds: Long = 0L,
 ) : ZcashBackendDelegate {
 
     companion object {
@@ -39,6 +40,9 @@ class ZcashSdkBackendImpl(
         private const val SDK_ALIAS = "openwallet_zec"
         private const val PREFS_NAME = "zec_sdk_prefs"
         private const val KEY_INITIALIZED = "wallet_initialized"
+        private const val KEY_SEED_FP = "seed_fingerprint"
+        private const val ZCASH_BLOCK_TIME_SECONDS = 75L
+        private const val ONE_DAY_SECONDS = 86_400L
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -68,7 +72,29 @@ class ZcashSdkBackendImpl(
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private fun isWalletInitialized() = prefs().getBoolean(KEY_INITIALIZED, false)
-    private fun markWalletInitialized() = prefs().edit().putBoolean(KEY_INITIALIZED, true).apply()
+    private fun markWalletInitialized() =
+        prefs().edit()
+            .putBoolean(KEY_INITIALIZED, true)
+            .putString(KEY_SEED_FP, seedFingerprint())
+            .apply()
+
+    private fun seedFingerprint(): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(seedBytes)
+        return digest.take(8).joinToString("") { "%02x".format(it) }
+    }
+
+    private suspend fun estimateBirthday(isRestore: Boolean): BlockHeight? {
+        val checkpoint = runCatching {
+            BlockHeight.ofLatestCheckpoint(context, ZcashNetwork.Mainnet)
+        }.getOrNull() ?: return null
+        if (!isRestore) return checkpoint
+        val ageSeconds = System.currentTimeMillis() / 1000L - seedCreationTimeSeconds
+        if (ageSeconds <= 0) return checkpoint
+        val blocksBack = ageSeconds / ZCASH_BLOCK_TIME_SECONDS
+        val target = checkpoint.value - blocksBack
+        val floor = ZcashNetwork.Mainnet.saplingActivationHeight.value
+        return BlockHeight.new(maxOf(target, floor))
+    }
 
     // Non-blocking: invoked from the service main thread; all work runs on Dispatchers.IO.
     override fun startSync() {
@@ -78,18 +104,35 @@ class ZcashSdkBackendImpl(
             try {
                 loading = true
                 val endpoint = LightWalletEndpoint(primaryHost, primaryPort, isSecure = true)
-                val alreadyInitialized = isWalletInitialized()
-                val initMode = if (alreadyInitialized) {
-                    Log.d(TAG, "Resuming existing wallet")
-                    WalletInitMode.ExistingWallet
-                } else {
-                    Log.d(TAG, "First launch creating new wallet")
-                    WalletInitMode.NewWallet
+
+                // If the app's seed changed (wallet restored/recreated), the SDK database
+                // belongs to the old seed — erase it before initializing.
+                val fp = seedFingerprint()
+                val storedFp = prefs().getString(KEY_SEED_FP, null)
+                if (storedFp != null && storedFp != fp) {
+                    Log.i(TAG, "Seed changed since last init; erasing ZEC SDK database")
+                    runCatching {
+                        Synchronizer.erase(appContext = context,
+                            network = ZcashNetwork.Mainnet, alias = SDK_ALIAS)
+                    }
+                    prefs().edit().clear().apply()
                 }
-                val birthday: BlockHeight? = if (!alreadyInitialized) {
-                    runCatching { BlockHeight.ofLatestCheckpoint(context, ZcashNetwork.Mainnet) }
-                        .getOrNull().also { Log.d(TAG, "Birthday=$it") }
-                } else null
+
+                val alreadyInitialized = isWalletInitialized()
+                // A seed older than a day that the SDK has never seen is a restore,
+                // not a brand-new wallet — scan history from an estimated birthday.
+                val isRestore = seedCreationTimeSeconds > 0L &&
+                        (System.currentTimeMillis() / 1000L - seedCreationTimeSeconds) > ONE_DAY_SECONDS
+                val initMode = when {
+                    alreadyInitialized -> WalletInitMode.ExistingWallet
+                    isRestore -> WalletInitMode.RestoreWallet
+                    else -> WalletInitMode.NewWallet
+                }
+                Log.d(TAG, "Init mode=$initMode")
+                val birthday: BlockHeight? =
+                    if (!alreadyInitialized) estimateBirthday(isRestore)
+                        .also { Log.d(TAG, "Birthday=$it") }
+                    else null
 
                 val setup = AccountCreateSetup(
                     accountName = "OpenWallet ZEC",

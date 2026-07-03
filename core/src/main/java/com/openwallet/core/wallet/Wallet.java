@@ -126,6 +126,15 @@ final public class Wallet {
         return seed != null ? seed.getSeedBytes() : null;
     }
 
+    /**
+     * Unix-time (seconds) when the master key was created; 0 if unknown.
+     * Used by the ZEC backend to estimate a restore birthday height.
+     */
+    public long getSeedCreationTimeSeconds() {
+        if (masterKey == null) return 0L;
+        return masterKey.getCreationTimeSeconds();
+    }
+
     public static List<String> generateMnemonic(int entropyBitsSize) {
         byte[] entropy;
         if (ENTROPY_SIZE_DEBUG > 0) {

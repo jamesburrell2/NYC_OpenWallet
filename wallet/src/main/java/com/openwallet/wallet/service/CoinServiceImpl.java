@@ -320,7 +320,7 @@ public class CoinServiceImpl extends Service implements CoinService {
             }
 
             ZcashSdkBackendImpl backend = new ZcashSdkBackendImpl(
-                    this, seedBytes, host, port);
+                    this, seedBytes, host, port, wallet.getSeedCreationTimeSeconds());
             zecWallet.setBackend(backend);
             log.info("Injected ZcashSdkBackend for {}", type.getName());
         }
