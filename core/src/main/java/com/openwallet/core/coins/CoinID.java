@@ -26,6 +26,10 @@ import java.util.Set;
 public enum CoinID {
     NEWYORKCOIN_MAIN(NewYorkCoinMain.get()),  // PRIMARY — must be first
     ZCASH_MAIN(ZcashMain.get()),
+    // Hidden transparent-discovery companion to ZCASH_MAIN. Shares symbol "ZEC"
+    // and bip44Index 133 with it by design (see ZcashTransparentMain). Never added
+    // to Constants.SUPPORTED_COINS; auto-managed and fused into the ZEC screen.
+    ZCASH_TRANSPARENT_MAIN(ZcashTransparentMain.get()),
     BITCOIN_MAIN(BitcoinMain.get()),
     BITCOIN_TEST(BitcoinTest.get()),
     LITECOIN_MAIN(LitecoinMain.get()),
@@ -57,11 +61,17 @@ public enum CoinID {
         for (CoinID id : values()) {
             Networks.register(id.type);
 
-            if (symbolLookup.containsKey(id.type.symbol)) {
-                throw new IllegalStateException(
-                        "Coin currency codes must be unique, double found: " + id.type.symbol);
+            // ZcashTransparentMain intentionally shares symbol "ZEC" with ZcashMain.
+            // It is a hidden companion account, so skip symbol registration and let
+            // typeFromSymbol("ZEC") keep resolving to the user-facing ZcashMain (SDK)
+            // coin — used by exchange-rate and ShapeShift lookups.
+            if (!(id.type instanceof ZcashTransparentMain)) {
+                if (symbolLookup.containsKey(id.type.symbol)) {
+                    throw new IllegalStateException(
+                            "Coin currency codes must be unique, double found: " + id.type.symbol);
+                }
+                symbolLookup.put(id.type.symbol, id.type);
             }
-            symbolLookup.put(id.type.symbol, id.type);
 
             if (idLookup.containsKey(id.type.getId())) {
                 throw new IllegalStateException(
