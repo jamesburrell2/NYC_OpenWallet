@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -307,20 +308,20 @@ public class CoinServiceImpl extends Service implements CoinService {
                 continue;
             }
 
-            // Find the configured lightwalletd server for this coin type.
+            // Find the configured lightwalletd servers (primary + fallbacks) for this coin type.
             CoinType type = account.getCoinType();
-            String host = "zec.rocks";
-            int port = 443;
+            List<ZcashSdkBackendImpl.HostPort> servers = new ArrayList<>();
             for (CoinAddress addr : Constants.DEFAULT_COINS_SERVERS) {
-                if (addr.getType().equals(type) && !addr.getAddresses().isEmpty()) {
-                    host = addr.getAddresses().get(0).getHost();
-                    port = addr.getAddresses().get(0).getPort();
+                if (addr.getType().equals(type)) {
+                    for (ServerAddress sa : addr.getAddresses()) {
+                        servers.add(new ZcashSdkBackendImpl.HostPort(sa.getHost(), sa.getPort()));
+                    }
                     break;
                 }
             }
 
             ZcashSdkBackendImpl backend = new ZcashSdkBackendImpl(
-                    this, seedBytes, host, port, wallet.getSeedCreationTimeSeconds());
+                    this, seedBytes, servers, wallet.getSeedCreationTimeSeconds());
             zecWallet.setBackend(backend);
             log.info("Injected ZcashSdkBackend for {}", type.getName());
         }

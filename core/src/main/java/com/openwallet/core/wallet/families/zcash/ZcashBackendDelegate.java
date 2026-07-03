@@ -75,6 +75,12 @@ public interface ZcashBackendDelegate {
      */
     int getSyncProgressPercent();
 
+    /**
+     * Human-readable description of the last fatal sync error, or null if healthy.
+     * Cleared on the next successful connection.
+     */
+    @Nullable String getLastErrorMessage();
+
     // ---- Transactions -------------------------------------------------------
 
     /**

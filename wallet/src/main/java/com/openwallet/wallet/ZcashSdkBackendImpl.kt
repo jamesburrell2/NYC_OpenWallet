@@ -30,10 +30,15 @@ import kotlinx.coroutines.launch
 class ZcashSdkBackendImpl(
     private val context: Context,
     private val seedBytes: ByteArray,
-    private val primaryHost: String = "zec.rocks",
-    private val primaryPort: Int = 443,
+    private val servers: List<ZcashSdkBackendImpl.HostPort>,
     private val seedCreationTimeSeconds: Long = 0L,
 ) : ZcashBackendDelegate {
+
+    /** A single lightwalletd endpoint to try (host, port). */
+    data class HostPort(val host: String, val port: Int)
+
+    /** Thrown when the on-disk SDK database can't be prepared for the current seed. */
+    private class SeedDatabaseException(message: String) : Exception(message)
 
     companion object {
         private const val TAG = "ZcashSdkBackend"
@@ -60,6 +65,8 @@ class ZcashSdkBackendImpl(
     @Volatile private var loading: Boolean = false
     @Volatile private var syncProgressPercent: Int = 0
     @Volatile private var updateListener: ZcashBackendDelegate.UpdateListener? = null
+    @Volatile private var lastError: String? = null
+    override fun getLastErrorMessage(): String? = lastError
 
     override fun setUpdateListener(listener: ZcashBackendDelegate.UpdateListener?) {
         updateListener = listener
@@ -108,111 +115,131 @@ class ZcashSdkBackendImpl(
         if (syncJob?.isActive == true) return
         syncJob = scope.launch {
             stopJob?.join() // wait for any in-flight teardown before re-creating the synchronizer
-            try {
-                loading = true
-                val endpoint = LightWalletEndpoint(primaryHost, primaryPort, isSecure = true)
-
-                // If the app's seed changed (wallet restored/recreated), the SDK database
-                // belongs to the old seed — erase it before initializing.
-                val fp = seedFingerprint()
-                val storedFp = prefs().getString(KEY_SEED_FP, null)
-                if (storedFp != null && storedFp != fp) {
-                    Log.i(TAG, "Seed changed since last init; erasing ZEC SDK database")
-                    val eraseFailed = runCatching {
-                        Synchronizer.erase(appContext = context,
-                            network = ZcashNetwork.Mainnet, alias = SDK_ALIAS)
-                    }.onFailure {
-                        Log.e(TAG, "Failed to erase stale ZEC DB before reinit", it)
-                    }.isFailure
-                    if (eraseFailed) {
-                        // Fail closed: initializing over a stale DB for a different seed
-                        // risks a corrupted balance/tx view. Retry on the next startSync().
-                        loading = false
-                        connected = false
-                        notifyUpdated()
-                        return@launch
-                    }
-                    prefs().edit().clear().apply()
+            loading = true
+            var sync: CloseableSynchronizer? = null
+            var lastException: Exception? = null
+            for (server in servers.ifEmpty { listOf(HostPort("zec.rocks", 443)) }) {
+                try {
+                    sync = openSynchronizer(server)
+                    break
+                } catch (e: SeedDatabaseException) {
+                    // Server-independent failure (stale DB erase failed): don't try other servers.
+                    lastException = e
+                    break
+                } catch (e: Exception) {
+                    lastException = e
+                    Log.e(TAG, "ZEC init failed on ${server.host}: ${e.javaClass.simpleName}")
                 }
-
-                val alreadyInitialized = isWalletInitialized()
-                // creation time 0 = restored/unknown age; recent (<1 day) = genuinely new wallet
-                // >1 day old and never seen by the SDK: an existing wallet adding ZEC, not a fresh one
-                val isRestore = seedCreationTimeSeconds <= 0L ||
-                        (System.currentTimeMillis() / 1000L - seedCreationTimeSeconds) > ONE_DAY_SECONDS
-                val initMode = when {
-                    alreadyInitialized -> WalletInitMode.ExistingWallet
-                    isRestore -> WalletInitMode.RestoreWallet
-                    else -> WalletInitMode.NewWallet
-                }
-                Log.d(TAG, "Init mode=$initMode")
-                val birthday: BlockHeight? =
-                    if (!alreadyInitialized) estimateBirthday(isRestore)
-                        .also { Log.d(TAG, "Birthday=$it") }
-                    else null
-
-                val setup = AccountCreateSetup(
-                    accountName = "OpenWallet ZEC",
-                    keySource = null,
-                    seed = FirstClassByteArray(seedBytes),
-                )
-                val sync = Synchronizer.new(
-                    alias = SDK_ALIAS,
-                    birthday = birthday,
-                    context = context,
-                    lightWalletEndpoint = endpoint,
-                    setup = setup,
-                    walletInitMode = initMode,
-                    zcashNetwork = ZcashNetwork.Mainnet,
-                )
-                synchronizer = sync
-                if (!alreadyInitialized) markWalletInitialized()
-
-                val accounts = sync.getAccounts()
-                val account = accounts.firstOrNull()
-                cachedAccount = account
-                if (account != null) {
-                    cachedAddress = sync.getUnifiedAddress(account)
-                    cachedTAddress = sync.getTransparentAddress(account)
-                    cachedSaplingAddress = runCatching { sync.getSaplingAddress(account) }.getOrNull()
-                    Log.d(TAG, "UA=$cachedAddress t=$cachedTAddress sapling=$cachedSaplingAddress")
-                }
-
-                launch {
-                    sync.walletBalances.collectLatest { balances ->
-                        if (balances != null) {
-                            cachedBalance = balances.values.sumOf { b ->
-                                b.sapling.total.value + b.orchard.total.value + b.unshielded.value
-                            }
-                            connected = true
-                            loading = false
-                            notifyUpdated()
-                        }
-                    }
-                }
-
-                launch {
-                    sync.transactions.collectLatest { txList ->
-                        cachedTransactions = txList.mapNotNull { mapTransaction(it) }
-                        notifyUpdated()
-                    }
-                }
-
-                launch {
-                    sync.progress.collectLatest { pct ->
-                        val newPct = (pct.decimal * 100f).toInt().coerceIn(0, 100)
-                        if (newPct != syncProgressPercent) {
-                            syncProgressPercent = newPct
-                            notifyUpdated()
-                        }
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Sync startup error: ${e.message}", e)
+            }
+            if (sync == null) {
                 loading = false
                 connected = false
+                lastError = lastException?.message ?: "Unable to reach any Zcash server"
                 notifyUpdated()
+                return@launch
+            }
+            lastError = null
+            synchronizer = sync
+            attachCollectors(sync)
+        }
+    }
+
+    private suspend fun openSynchronizer(server: HostPort): CloseableSynchronizer {
+        val endpoint = LightWalletEndpoint(server.host, server.port, isSecure = true)
+
+        // If the app's seed changed (wallet restored/recreated), the SDK database
+        // belongs to the old seed — erase it before initializing.
+        val fp = seedFingerprint()
+        val storedFp = prefs().getString(KEY_SEED_FP, null)
+        if (storedFp != null && storedFp != fp) {
+            Log.i(TAG, "Seed changed since last init; erasing ZEC SDK database")
+            val eraseFailed = runCatching {
+                Synchronizer.erase(appContext = context,
+                    network = ZcashNetwork.Mainnet, alias = SDK_ALIAS)
+            }.onFailure {
+                Log.e(TAG, "Failed to erase stale ZEC DB before reinit", it)
+            }.isFailure
+            if (eraseFailed) {
+                // Fail closed: initializing over a stale DB for a different seed
+                // risks a corrupted balance/tx view. Retry on the next startSync().
+                throw SeedDatabaseException("Failed to erase stale ZEC database")
+            }
+            prefs().edit().clear().apply()
+        }
+
+        val alreadyInitialized = isWalletInitialized()
+        // creation time 0 = restored/unknown age; recent (<1 day) = genuinely new wallet
+        // >1 day old and never seen by the SDK: an existing wallet adding ZEC, not a fresh one
+        val isRestore = seedCreationTimeSeconds <= 0L ||
+                (System.currentTimeMillis() / 1000L - seedCreationTimeSeconds) > ONE_DAY_SECONDS
+        val initMode = when {
+            alreadyInitialized -> WalletInitMode.ExistingWallet
+            isRestore -> WalletInitMode.RestoreWallet
+            else -> WalletInitMode.NewWallet
+        }
+        Log.d(TAG, "Init mode=$initMode")
+        val birthday: BlockHeight? =
+            if (!alreadyInitialized) estimateBirthday(isRestore)
+                .also { Log.d(TAG, "Birthday=$it") }
+            else null
+
+        val setup = AccountCreateSetup(
+            accountName = "OpenWallet ZEC",
+            keySource = null,
+            seed = FirstClassByteArray(seedBytes),
+        )
+        val sync = Synchronizer.new(
+            alias = SDK_ALIAS,
+            birthday = birthday,
+            context = context,
+            lightWalletEndpoint = endpoint,
+            setup = setup,
+            walletInitMode = initMode,
+            zcashNetwork = ZcashNetwork.Mainnet,
+        )
+        if (!alreadyInitialized) markWalletInitialized()
+
+        val accounts = sync.getAccounts()
+        val account = accounts.firstOrNull()
+        cachedAccount = account
+        if (account != null) {
+            cachedAddress = sync.getUnifiedAddress(account)
+            cachedTAddress = sync.getTransparentAddress(account)
+            cachedSaplingAddress = runCatching { sync.getSaplingAddress(account) }.getOrNull()
+            Log.d(TAG, "UA=$cachedAddress t=$cachedTAddress sapling=$cachedSaplingAddress")
+        }
+
+        return sync
+    }
+
+    private fun CoroutineScope.attachCollectors(sync: CloseableSynchronizer) {
+        launch {
+            sync.walletBalances.collectLatest { balances ->
+                if (balances != null) {
+                    cachedBalance = balances.values.sumOf { b ->
+                        b.sapling.total.value + b.orchard.total.value + b.unshielded.value
+                    }
+                    connected = true
+                    loading = false
+                    notifyUpdated()
+                }
+            }
+        }
+
+        launch {
+            sync.transactions.collectLatest { txList ->
+                cachedTransactions = txList.mapNotNull { mapTransaction(it) }
+                notifyUpdated()
+            }
+        }
+
+        launch {
+            sync.progress.collectLatest { pct ->
+                val newPct = (pct.decimal * 100f).toInt().coerceIn(0, 100)
+                if (newPct != syncProgressPercent) {
+                    syncProgressPercent = newPct
+                    notifyUpdated()
+                }
             }
         }
     }

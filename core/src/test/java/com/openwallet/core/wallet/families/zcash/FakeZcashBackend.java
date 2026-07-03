@@ -11,6 +11,7 @@ public class FakeZcashBackend implements ZcashBackendDelegate {
     public List<ZcashSdkTransaction> transactions = new ArrayList<>();
     public String lastRecipient;
     public long lastZatoshi;
+    public String lastError;
 
     @Nullable private UpdateListener updateListener;
 
@@ -34,6 +35,9 @@ public class FakeZcashBackend implements ZcashBackendDelegate {
     @Override public boolean isLoading() { return false; }
     @Override public int getSyncProgressPercent() { return 100; }
     @Override public List<ZcashSdkTransaction> getTransactions() { return transactions; }
+
+    @Nullable @Override
+    public String getLastErrorMessage() { return lastError; }
 
     @Override
     public void sendTo(String recipient, long zatoshi, @Nullable String memo, SendCallback cb) {
