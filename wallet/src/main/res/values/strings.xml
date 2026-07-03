@@ -66,6 +66,7 @@
     <!-- &#8230; is the ... character -->
     <string name="unlocking_wallet_working">Unlocking your wallet&#8230;</string>
     <string name="unlocking_wallet_error_title">Could not unlock your wallet</string>
+    <string name="zec_unlock_for_sync_message">Zcash needs your password once per session to sync. Your balance stays paused until then.</string>
     <string name="unlocking_wallet_error_detail">Are you using the correct password? Please make sure that your password was entered correctly. Attempt to restore your wallet using its recovery phrase if this error persists.</string>
     <string name="powered_by">Powered by</string>
     <!-- Nav drawer -->

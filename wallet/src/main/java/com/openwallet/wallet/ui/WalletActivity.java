@@ -238,6 +238,8 @@ final public class WalletActivity extends BaseWalletActivity implements
         getWalletApplication().startBlockchainService(CoinService.ServiceMode.CANCEL_COINS_RECEIVED);
         connectAllCoinService();
 
+        maybePromptUnlockForZcash();
+
         // Restore the correct action bar shadow
         if (getSupportActionBar() != null) {
             if (isOverviewVisible) {
@@ -249,6 +251,75 @@ final public class WalletActivity extends BaseWalletActivity implements
         }
     }
 
+
+    /** Shown at most once per process session. */
+    private static boolean zecUnlockPromptShown = false;
+
+    /**
+     * Encrypted wallets can't hand the ZEC SDK its seed without the user's password.
+     * If a Zcash account exists but no seed is cached this session, ask once so sync
+     * can start (see ZecSeedCache). Declining just leaves ZEC paused.
+     */
+    private void maybePromptUnlockForZcash() {
+        if (zecUnlockPromptShown) return;
+        final com.openwallet.core.wallet.Wallet wallet = getWalletApplication().getWallet();
+        if (wallet == null || !wallet.isEncrypted()) return;
+        if (com.openwallet.wallet.util.ZecSeedCache.get() != null) return;
+        boolean hasZec = false;
+        for (WalletAccount account : getAllAccounts()) {
+            if (account instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) {
+                hasZec = true;
+                break;
+            }
+        }
+        if (!hasZec) return;
+        zecUnlockPromptShown = true;
+
+        final android.widget.EditText passwordView = new android.widget.EditText(this);
+        passwordView.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passwordView.setHint(R.string.enter_password);
+
+        new DialogBuilder(this)
+                .setTitle(R.string.unlock_wallet_title)
+                .setMessage(R.string.zec_unlock_for_sync_message)
+                .setView(passwordView)
+                .setNegativeButton(R.string.button_cancel, null)
+                .setPositiveButton(R.string.button_ok, (dialog, which) ->
+                        cacheZecSeedAsync(wallet, passwordView.getText().toString()))
+                .create().show();
+    }
+
+    private void cacheZecSeedAsync(final com.openwallet.core.wallet.Wallet wallet, final String password) {
+        new android.os.AsyncTask<Void, Void, Boolean>() {
+            @Override
+            protected Boolean doInBackground(Void... params) {
+                try {
+                    org.spongycastle.crypto.params.KeyParameter key =
+                            wallet.getKeyCrypter().deriveKey(password);
+                    byte[] seed = wallet.getSeedBytes(key);
+                    if (seed == null) return false;
+                    com.openwallet.wallet.util.ZecSeedCache.capture(seed);
+                    java.util.Arrays.fill(seed, (byte) 0);
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(Boolean ok) {
+                if (ok) {
+                    // Re-run backend injection now that the seed is available.
+                    connectAllCoinService();
+                } else {
+                    Toast.makeText(WalletActivity.this,
+                            R.string.unlocking_wallet_error_title, Toast.LENGTH_LONG).show();
+                    zecUnlockPromptShown = false; // allow retrying on next resume
+                }
+            }
+        }.execute();
+    }
 
     @Override
     public void onLocalAmountClick() {
