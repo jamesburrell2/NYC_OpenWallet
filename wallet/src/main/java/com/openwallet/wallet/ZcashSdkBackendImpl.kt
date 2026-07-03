@@ -167,7 +167,7 @@ class ZcashSdkBackendImpl(
                 Synchronizer.erase(appContext = context,
                     network = ZcashNetwork.Mainnet, alias = SDK_ALIAS)
             }.onFailure {
-                Log.e(TAG, "Failed to erase stale ZEC DB before reinit", it)
+                Log.e(TAG, "Failed to erase stale ZEC DB before reinit: ${it.javaClass.simpleName}")
             }.isFailure
             if (eraseFailed) {
                 // Fail closed: initializing over a stale DB for a different seed
@@ -304,7 +304,7 @@ class ZcashSdkBackendImpl(
                 null,
             )
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to map tx: ${e.message}")
+            Log.w(TAG, "Failed to map tx: ${e.javaClass.simpleName}")
             null
         }
     }
