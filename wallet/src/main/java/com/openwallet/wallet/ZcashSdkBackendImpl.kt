@@ -116,9 +116,17 @@ class ZcashSdkBackendImpl(
         syncJob = scope.launch {
             stopJob?.join() // wait for any in-flight teardown before re-creating the synchronizer
             loading = true
+            if (servers.isEmpty()) {
+                // Should be unreachable: Constants.DEFAULT_COINS_SERVERS always lists ZEC servers.
+                loading = false
+                connected = false
+                lastError = "No Zcash servers configured"
+                notifyUpdated()
+                return@launch
+            }
             var sync: CloseableSynchronizer? = null
             var lastException: Exception? = null
-            for (server in servers.ifEmpty { listOf(HostPort("zec.rocks", 443)) }) {
+            for (server in servers) {
                 try {
                     sync = openSynchronizer(server)
                     break
@@ -134,7 +142,9 @@ class ZcashSdkBackendImpl(
             if (sync == null) {
                 loading = false
                 connected = false
-                lastError = lastException?.message ?: "Unable to reach any Zcash server"
+                lastError = lastException
+                    ?.let { "${it.javaClass.simpleName}: ${it.message}".take(200) }
+                    ?: "Unable to reach any Zcash server"
                 notifyUpdated()
                 return@launch
             }
@@ -212,6 +222,10 @@ class ZcashSdkBackendImpl(
         return sync
     }
 
+    /**
+     * Must be called from within syncJob's coroutine scope — stopSync() cancels syncJob
+     * to tear these collectors down together with the synchronizer.
+     */
     private fun CoroutineScope.attachCollectors(sync: CloseableSynchronizer) {
         launch {
             sync.walletBalances.collectLatest { balances ->
