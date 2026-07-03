@@ -808,23 +808,21 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
     @Override
     public void onAddressStatusUpdate(AddressStatus status) {
         log.debug("Got a status {}", status);
+        boolean subscribeNeeded = false;
+        BitBlockchainConnection fetchConn = null;
         lock.lock();
         try {
             confirmAddressSubscription(status.getAddress());
             if (status.getStatus() != null) {
                 markAddressAsUsed(status.getAddress());
-                subscribeToAddressesIfNeeded();
+                subscribeNeeded = true;
 
                 if (isAddressStatusChanged(status)) {
                     // Status changed, time to update
                     if (registerStatusForUpdate(status)) {
                         log.info("Must get transactions for address {}, status {}",
                                 status.getAddress(), status.getStatus());
-
-                        if (blockchainConnection != null) {
-                            blockchainConnection.getUnspentTx(status, this);
-                            blockchainConnection.getHistoryTx(status, this);
-                        }
+                        fetchConn = blockchainConnection;
                     } else {
                         log.info("Status {} already updating", status.getStatus());
                     }
@@ -838,6 +836,14 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
         }
         finally {
             lock.unlock();
+        }
+        // Blocking socket writes — keep outside the pocket lock (see onConnection)
+        if (fetchConn != null) {
+            fetchConn.getUnspentTx(status, this);
+            fetchConn.getHistoryTx(status, this);
+        }
+        if (subscribeNeeded) {
+            subscribeToAddressesIfNeeded();
         }
     }
 
@@ -1231,12 +1237,15 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
             if (unspentOutputs.isEmpty()) {
                 addressesStatus.clear();
             }
-            subscribeToBlockchain();
-            subscribeToAddressesIfNeeded();
             queueOnConnectivity();
         } finally {
             lock.unlock();
         }
+        // Network I/O happens OUTSIDE the pocket lock: StratumClient.call() is a
+        // blocking socket write, and a slow/stalled ElectrumX server would otherwise
+        // keep the lock held for minutes, starving UI-thread reads into ANRs.
+        subscribeToBlockchain();
+        subscribeToAddressesIfNeeded();
     }
 
     @Override
@@ -1252,34 +1261,42 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
     }
 
     private void subscribeToBlockchain() {
+        final BitBlockchainConnection conn;
+        final List<Integer> missingHeights;
         lock.lock();
         try {
-            if (blockchainConnection != null) {
-                blockchainConnection.subscribeToBlockchain(this);
-                for (Integer missingTimestampOnHeight : missingTimestamps.keySet()) {
-                    blockchainConnection.getBlock(missingTimestampOnHeight, this);
-                }
-            }
+            conn = blockchainConnection;
+            if (conn == null) return;
+            missingHeights = new java.util.ArrayList<>(missingTimestamps.keySet());
         } finally {
             lock.unlock();
+        }
+        // Blocking socket writes — keep outside the pocket lock (see onConnection)
+        conn.subscribeToBlockchain(this);
+        for (Integer missingTimestampOnHeight : missingHeights) {
+            conn.getBlock(missingTimestampOnHeight, this);
         }
     }
 
     void subscribeToAddressesIfNeeded() {
+        final BitBlockchainConnection conn;
+        final List<AbstractAddress> addressesToWatch;
         lock.lock();
         try {
-            if (blockchainConnection != null) {
-                List<AbstractAddress> addressesToWatch = getAddressesToWatch();
-                if (addressesToWatch.size() > 0) {
-                    addressesPendingSubscription.addAll(addressesToWatch);
-                    blockchainConnection.subscribeToAddresses(addressesToWatch, this);
-                    queueOnConnectivity();
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error subscribing to addresses", e);
+            conn = blockchainConnection;
+            if (conn == null) return;
+            addressesToWatch = getAddressesToWatch();
+            if (addressesToWatch.isEmpty()) return;
+            addressesPendingSubscription.addAll(addressesToWatch);
+            queueOnConnectivity();
         } finally {
             lock.unlock();
+        }
+        try {
+            // Blocking socket writes — keep outside the pocket lock (see onConnection)
+            conn.subscribeToAddresses(addressesToWatch, this);
+        } catch (Exception e) {
+            log.error("Error subscribing to addresses", e);
         }
     }
 
