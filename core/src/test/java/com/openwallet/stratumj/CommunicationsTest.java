@@ -125,7 +125,7 @@ public class CommunicationsTest {
                 success.set(true);
                 testThread.interrupt();
             }
-        });
+        }, com.google.common.util.concurrent.MoreExecutors.directExecutor());
 
         try {
             Thread.sleep(5000);

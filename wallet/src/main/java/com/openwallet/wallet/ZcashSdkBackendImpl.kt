@@ -18,6 +18,7 @@ import co.electriccoin.lightwallet.client.model.LightWalletEndpoint
 import com.openwallet.core.coins.ZcashMain
 import com.openwallet.core.wallet.families.zcash.ZcashBackendDelegate
 import com.openwallet.core.wallet.families.zcash.ZcashSdkTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -125,18 +126,22 @@ class ZcashSdkBackendImpl(
                 return@launch
             }
             var sync: CloseableSynchronizer? = null
-            var lastException: Exception? = null
+            var lastException: Throwable? = null
             for (server in servers) {
                 try {
                     sync = openSynchronizer(server)
                     break
+                } catch (e: CancellationException) {
+                    throw e // never swallow coroutine cancellation
                 } catch (e: SeedDatabaseException) {
                     // Server-independent failure (stale DB erase failed): don't try other servers.
                     lastException = e
                     break
-                } catch (e: Exception) {
-                    lastException = e
-                    Log.e(TAG, "ZEC init failed on ${server.host}: ${e.javaClass.simpleName}")
+                } catch (t: Throwable) {
+                    // Throwable, not Exception: dependency/linkage Errors (e.g. a library
+                    // version conflict) must degrade to "connection failed", not kill the app.
+                    lastException = t
+                    Log.e(TAG, "ZEC init failed on ${server.host}: ${t.javaClass.simpleName}")
                 }
             }
             if (sync == null) {

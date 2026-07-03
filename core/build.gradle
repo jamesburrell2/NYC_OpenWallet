@@ -8,7 +8,8 @@ java {
 dependencies {
     api fileTree(dir: 'libs', include: ['*.jar'])  // expose bitcoinj to consumers (wallet module)
 
-    implementation 'com.google.guava:guava:16.0.1'
+    // Keep in sync with the wallet module's forced version (grpc needs 32.x)
+    implementation 'com.google.guava:guava:32.1.3-android'
     implementation 'com.google.code.findbugs:jsr305:2.0.1'
     implementation 'com.madgag.spongycastle:core:1.51.0.0'
 

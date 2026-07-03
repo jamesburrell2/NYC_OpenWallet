@@ -71,8 +71,10 @@ repositories {
 
 configurations.all {
     resolutionStrategy {
-        // AndroidX brings listenablefuture:1.0 which clashes with full guava jar
-        force 'com.google.guava:guava:16.0.1'
+        // AndroidX brings listenablefuture:1.0 which clashes with full guava jar.
+        // 32.x needed by grpc (zcash-android-sdk): Metadata calls Preconditions
+        // overloads that don't exist in the legacy 16.0.1 (fatal NoSuchMethodError).
+        force 'com.google.guava:guava:32.1.3-android'
         // Force consistent kotlin-stdlib version across all transitive deps
         force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
         force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
@@ -104,7 +106,7 @@ dependencies {
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.viewpager:viewpager:1.0.0'
     implementation 'androidx.cursoradapter:cursoradapter:1.0.0'
-    implementation 'com.google.guava:guava:16.0.1'
+    implementation 'com.google.guava:guava:32.1.3-android'
     implementation 'com.google.code.findbugs:jsr305:2.0.1'
     implementation 'com.madgag.spongycastle:core:1.51.0.0'
     implementation 'com.google.protobuf:protobuf-java:3.22.3'

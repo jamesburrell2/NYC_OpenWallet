@@ -21,8 +21,8 @@ import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.messages.TxMessage;
 import com.openwallet.core.wallet.families.bitcoin.CoinSelector;
-import com.google.common.base.Objects;
-import com.google.common.base.Objects.ToStringHelper;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
 
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.Wallet.MissingSigsMode;
@@ -187,7 +187,7 @@ public class SendRequest<T extends AbstractTransaction> implements Serializable 
     @Override
     public String toString() {
         // print only the user-settable fields
-        ToStringHelper helper = Objects.toStringHelper(this).omitNullValues();
+        ToStringHelper helper = MoreObjects.toStringHelper(this).omitNullValues();
         helper.add("emptyWallet", emptyWallet);
         helper.add("changeAddress", changeAddress);
         helper.add("fee", fee);
