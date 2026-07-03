@@ -306,7 +306,11 @@ class ZcashSdkBackendImpl(
         return try {
             val txIdHex = tx.rawId.byteArray.joinToString("") { "%02x".format(it) }
             val blockHeight = tx.minedHeight?.value?.toInt() ?: -1
-            val timestampMs = (tx.blockTimeEpochSeconds ?: 0L) * 1_000L
+            // App-wide convention: AbstractTransaction.getTimestamp() is epoch SECONDS
+            // (BitTransaction stores it likewise; TimeUtils multiplies by 1000 for display).
+            // blockTimeEpochSeconds is already seconds — do NOT scale to millis, or the UI
+            // renders absurd years (~52371) after the second x1000 in TimeUtils.
+            val timestampSec = tx.blockTimeEpochSeconds ?: 0L
             val isIncoming = !tx.isSentTransaction
             val zatoshi = Math.abs(tx.netValue.value)
             val feeSatoshis = tx.feePaid?.value ?: 0L
@@ -315,7 +319,7 @@ class ZcashSdkBackendImpl(
                 txIdHex,
                 zatoshi,
                 feeSatoshis,
-                if (timestampMs > 0L) timestampMs else System.currentTimeMillis(),
+                if (timestampSec > 0L) timestampSec else System.currentTimeMillis() / 1000L,
                 blockHeight,
                 isIncoming,
                 null,

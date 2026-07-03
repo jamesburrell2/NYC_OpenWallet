@@ -590,7 +590,7 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
                 pendingId.toString(),
                 amount.getValue(),
                 ZIP317_STANDARD_FEE,              // ZIP-317 conventional fee estimate in zatoshi
-                System.currentTimeMillis(),
+                System.currentTimeMillis() / 1000L, // getTimestamp() convention is epoch SECONDS
                 -1,                              // not yet mined
                 false,                           // outgoing
                 destination.toString());

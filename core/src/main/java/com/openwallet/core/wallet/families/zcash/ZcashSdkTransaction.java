@@ -57,7 +57,7 @@ public class ZcashSdkTransaction implements AbstractTransaction, Serializable {
         this.txId = null;
         this.valueZatoshi = balanceZatoshi;
         this.feeSatoshis = 0;
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = System.currentTimeMillis() / 1000L; // getTimestamp() convention: epoch SECONDS
         this.blockHeight = -1;
         this.isIncoming = false;
         this.toAddress = null;
