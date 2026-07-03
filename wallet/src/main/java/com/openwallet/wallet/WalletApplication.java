@@ -446,14 +446,25 @@ public class WalletApplication extends Application {
     }
 
     public void startBlockchainService(CoinService.ServiceMode mode) {
+        final Intent intent;
         switch (mode) {
             case CANCEL_COINS_RECEIVED:
-                startService(coinServiceCancelCoinsReceivedIntent);
+                intent = coinServiceCancelCoinsReceivedIntent;
                 break;
             case NORMAL:
             default:
-                startService(coinServiceIntent);
+                intent = coinServiceIntent;
                 break;
+        }
+        try {
+            startService(intent);
+        } catch (IllegalStateException e) {
+            // Android 12+ (BackgroundServiceStartNotAllowedException extends this):
+            // the app was briefly treated as background during a lifecycle edge (e.g.
+            // resume right after process restart). Don't crash — the service starts on
+            // the next foreground event (onResume/tick) instead.
+            log.warn("Deferred CoinService start; app treated as background: {}",
+                    e.getClass().getSimpleName());
         }
     }
 
