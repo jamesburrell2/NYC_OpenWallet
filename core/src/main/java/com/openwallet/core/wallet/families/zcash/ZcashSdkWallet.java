@@ -116,6 +116,22 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
         this.tAddress = fallback;
     }
 
+    /**
+     * Deserialization constructor. Restores an account from its persisted identity
+     * and previously derived t-address (the root HD key is not persisted — it is
+     * only ever used once, at creation time, to derive the fallback t-address).
+     */
+    public ZcashSdkWallet(CoinType coinType, String id, String tAddressStr) {
+        super(coinType, id);
+        this.balance = coinType.value(0);
+        this.tAddress = new ZcashSdkAddress(coinType, tAddressStr == null ? "" : tAddressStr);
+    }
+
+    /** The persisted fallback t-address (may be empty); stable regardless of backend state. */
+    public String getFallbackTAddressString() {
+        return tAddress.toString();
+    }
+
     // ---- Backend injection --------------------------------------------------
 
     /**

@@ -9,6 +9,7 @@ import com.openwallet.core.coins.families.SolanaFamily;
 import com.openwallet.core.coins.families.CardanoFamily;
 import com.openwallet.core.coins.families.ChiaFamily;
 import com.openwallet.core.coins.families.ZcashSdkFamily;
+import com.openwallet.core.wallet.families.zcash.ZcashSdkWallet;
 import com.openwallet.core.protos.Protos;
 import com.openwallet.core.util.KeyUtils;
 import com.openwallet.core.wallet.families.bitcoin.BitTransaction;
@@ -124,8 +125,11 @@ public class WalletProtobufSerializer {
                 pocketProto = WalletPocketProtobufSerializer.toProtobuf((WalletPocketHD) account);
             } else if (account instanceof NxtFamilyWallet) {
                 pocketProto = NxtFamilyWalletProtobufSerializer.toProtobuf((NxtFamilyWallet) account);
+            } else if (account instanceof ZcashSdkWallet) {
+                pocketProto = ZcashSdkWalletProtobufSerializer.toProtobuf((ZcashSdkWallet) account);
             } else {
-                // Skip new families (EVM, Solana, Cardano, Chia, ZcashSdk) — they are recreated on load
+                // Skip unreachable stub families (EVM, Solana, Cardano, Chia) — they are
+                // not in SUPPORTED_COINS and hold no state worth persisting.
                 continue;
             }
             walletBuilder.addPockets(pocketProto);
@@ -222,10 +226,12 @@ public class WalletProtobufSerializer {
                 pocket = pocketSerializer.readWallet(pocketProto, crypter);
             } else if (type instanceof NxtFamily) {
                 pocket = nxtPocketSerializer.readWallet(pocketProto, crypter);
+            } else if (type instanceof ZcashSdkFamily) {
+                pocket = ZcashSdkWalletProtobufSerializer.readWallet(pocketProto);
             } else if (type instanceof EvmFamily || type instanceof SolanaFamily
-                    || type instanceof CardanoFamily || type instanceof ChiaFamily
-                    || type instanceof ZcashSdkFamily) {
-                // New families are recreated in-memory; skip serialized pocket
+                    || type instanceof CardanoFamily || type instanceof ChiaFamily) {
+                // Unreachable stub families: nothing is serialized for them (see toProtobuf),
+                // but skip defensively in case an old wallet file carries such a pocket.
                 continue;
             } else {
                 throw new UnreadableWalletException("Unsupported type " + type);
