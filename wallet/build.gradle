@@ -15,8 +15,8 @@ android {
         applicationId "com.newyorkcoin.openwallet"
         minSdk 27
         targetSdk 34
-        versionCode 62
-        versionName "v1.8.4"
+        versionCode 63
+        versionName "v1.8.5"
     }
 
     signingConfigs {
