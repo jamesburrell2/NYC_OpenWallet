@@ -216,7 +216,7 @@ class ZcashSdkBackendImpl(
             cachedAddress = sync.getUnifiedAddress(account)
             cachedTAddress = sync.getTransparentAddress(account)
             cachedSaplingAddress = runCatching { sync.getSaplingAddress(account) }.getOrNull()
-            Log.d(TAG, "UA=$cachedAddress t=$cachedTAddress sapling=$cachedSaplingAddress")
+            Log.d(TAG, "Addresses derived: ua=${cachedAddress != null} t=${cachedTAddress != null} sapling=${cachedSaplingAddress != null}")
         }
 
         return sync
@@ -343,7 +343,7 @@ class ZcashSdkBackendImpl(
                 callback.onSuccess(txId)
 
             } catch (e: Exception) {
-                Log.e(TAG, "ZEC send failed: ${e.message}", e)
+                Log.e(TAG, "ZEC send failed: ${e.javaClass.simpleName}")
                 callback.onError(e)
             }
         }
