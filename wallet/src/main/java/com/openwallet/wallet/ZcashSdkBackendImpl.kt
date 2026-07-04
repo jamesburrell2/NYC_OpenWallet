@@ -19,6 +19,7 @@ import com.openwallet.core.coins.ZcashMain
 import com.openwallet.core.wallet.families.zcash.ZcashBackendDelegate
 import com.openwallet.core.wallet.families.zcash.ZcashSdkTransaction
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,7 +52,18 @@ class ZcashSdkBackendImpl(
         private const val ONE_DAY_SECONDS = 86_400L
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    // Final safety net: an uncaught exception in ANY coroutine launched on this scope
+    // would otherwise reach the thread's default handler and crash the whole app. The
+    // Zcash SDK sync flows can throw transiently (DB/network/closed synchronizer), so
+    // degrade to a logged, user-visible error instead of a crash. (No PII: class name only.)
+    private val crashGuard = CoroutineExceptionHandler { _, throwable ->
+        if (throwable is CancellationException) return@CoroutineExceptionHandler
+        Log.e(TAG, "Uncaught ZEC sync coroutine error: ${throwable.javaClass.simpleName}")
+        lastError = "ZEC sync error: ${throwable.javaClass.simpleName}".take(200)
+        loading = false
+        notifyUpdated()
+    }
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + crashGuard)
     private var syncJob: Job? = null
     @Volatile private var stopJob: Job? = null
 
@@ -235,7 +247,7 @@ class ZcashSdkBackendImpl(
      * to tear these collectors down together with the synchronizer.
      */
     private fun CoroutineScope.attachCollectors(sync: CloseableSynchronizer) {
-        launch {
+        launch { collectGuarded("balance") {
             sync.walletBalances.collectLatest { balances ->
                 if (balances != null) {
                     val newBalance = balances.values.sumOf { b ->
@@ -251,18 +263,18 @@ class ZcashSdkBackendImpl(
                     if (changed) notifyUpdated()
                 }
             }
-        }
+        } }
 
-        launch {
+        launch { collectGuarded("transactions") {
             sync.transactions.collectLatest { txList ->
                 val mapped = txList.mapNotNull { mapTransaction(it) }
                 val changed = mapped.size != cachedTransactions.size
                 cachedTransactions = mapped
                 if (changed) notifyUpdated()
             }
-        }
+        } }
 
-        launch {
+        launch { collectGuarded("progress") {
             sync.progress.collectLatest { pct ->
                 val newPct = (pct.decimal * 100f).toInt().coerceIn(0, 100)
                 if (newPct != syncProgressPercent) {
@@ -270,6 +282,23 @@ class ZcashSdkBackendImpl(
                     notifyUpdated()
                 }
             }
+        } }
+    }
+
+    /**
+     * Runs one SDK flow collector, catching any transient error so a single flow failing
+     * (DB/network hiccup, synchronizer closed mid-emit) neither crashes the app nor tears
+     * down the sibling collectors. Cancellation is always rethrown. No PII is logged.
+     */
+    private suspend inline fun collectGuarded(name: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.e(TAG, "ZEC $name collector error: ${t.javaClass.simpleName}")
+            lastError = "ZEC $name error: ${t.javaClass.simpleName}".take(200)
+            notifyUpdated()
         }
     }
 
