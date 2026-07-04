@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">OpenWallet NYC</string>
+    <!-- Balance screen sync status -->
+    <string name="sync_block_height">Block %1$s</string>
+    <string name="sync_syncing_percent">Syncing %1$d%%</string>
+    <string name="sync_synced">Synced</string>
     <string name="app_package" translatable="false">com.newyorkcoin.openwallet</string>
     <string name="openwallet_website" translatable="false">https://openwallet.xyz</string>
     <string name="almost_equal_to" translatable="false">≈</string>

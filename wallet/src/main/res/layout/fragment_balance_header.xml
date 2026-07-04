@@ -53,6 +53,17 @@
             android:text="@string/disconnected_label" />
 
         <TextView
+            android:id="@+id/sync_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="@dimen/amount_margin_bottom"
+            android:textColor="@color/gray_26_hint_text"
+            android:textSize="@dimen/history_empty"
+            android:visibility="gone"
+            tools:text="Block 3,399,813" />
+
+        <TextView
             android:id="@+id/history_empty"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -310,6 +310,11 @@ public class ZcashSdkWallet extends AbstractWallet<ZcashSdkTransaction, ZcashSdk
         return backend != null && backend.isLoading();
     }
 
+    /** SDK block-scan progress, 0..100. -1 when no backend is attached. */
+    public int getSyncProgressPercent() {
+        return backend != null ? backend.getSyncProgressPercent() : -1;
+    }
+
     @Override
     public void disconnect() {
         if (backend != null) {

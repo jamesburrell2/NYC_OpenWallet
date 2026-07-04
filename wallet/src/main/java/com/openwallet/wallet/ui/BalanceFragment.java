@@ -97,6 +97,7 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
     @Bind(R.id.account_balance) Amount accountBalance;
     @Bind(R.id.account_exchanged_balance) Amount accountExchangedBalance;
     @Bind(R.id.connection_label) TextView connectionLabel;
+    @Bind(R.id.sync_status) TextView syncStatus;
     @Bind(R.id.no_server_banner) View noServerBanner;
     private TransactionsListAdapter adapter;
     private Listener listener;
@@ -549,7 +550,40 @@ public class BalanceFragment extends WalletFragment implements LoaderCallbacks<L
 
         if (pocket != null) swipeContainer.setRefreshing(pocket.isLoading());
 
+        updateSyncStatus();
+
         if (adapter != null) adapter.clearLabelCache();
+    }
+
+    /**
+     * Shows the current synced block height (BitFamily/ElectrumX coins) or SDK scan
+     * progress (ZEC) so the user can tell whether the wallet is fully synced.
+     */
+    private void updateSyncStatus() {
+        if (syncStatus == null || pocket == null) return;
+        CharSequence text = null;
+        if (pocket instanceof com.openwallet.core.wallet.TransactionWatcherWallet) {
+            int height = ((com.openwallet.core.wallet.TransactionWatcherWallet) pocket)
+                    .getLastBlockSeenHeight();
+            if (height > 0) {
+                text = getString(R.string.sync_block_height,
+                        java.text.NumberFormat.getIntegerInstance().format(height));
+            }
+        } else if (pocket instanceof com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) {
+            int pct = ((com.openwallet.core.wallet.families.zcash.ZcashSdkWallet) pocket)
+                    .getSyncProgressPercent();
+            if (pct >= 0 && pct < 100) {
+                text = getString(R.string.sync_syncing_percent, pct);
+            } else if (pct >= 100) {
+                text = getString(R.string.sync_synced);
+            }
+        }
+        if (text != null) {
+            syncStatus.setText(text);
+            syncStatus.setVisibility(View.VISIBLE);
+        } else {
+            syncStatus.setVisibility(View.GONE);
+        }
     }
 
     private void clearLabelCache() {
