@@ -26,6 +26,12 @@
   - DECISION PENDING (user): coinomi legacy servers are dead/ambiguous → self-host ZEC/ZCL ElectrumX on the VPS (Task 10 template) OR find current public servers, before wiring server entries (Task 3 Step 1, Task 8 Step 5). Pure-Java tasks (2, 4, 5, 6, 7-logic, 9-logic) have NO live-server dependency and can proceed.
 - Consensus branch IDs are consensus-critical and change with network upgrades. Do NOT trust values from memory — Task 6 Step 1 fetches them from authoritative sources and records them in `ZcashTxSigner` constants with citations.
 
+## SCOPE UPDATE (2026-07-04, user decision)
+
+- **Tasks 3 & 7 (ZEC transparent discovery + sweep) are DROPPED.** ZEC syncs fully via the zcash-android-sdk (lightwalletd / CompactBlockProcessor) — shielded + the SDK's own t-address. ElectrumX was only for multi-derivation-path transparent discovery; user confirmed lightwalletd is sufficient. This eliminates the dead-coinomi-ZEC-server problem. `ZcashTransparentMain` (Task 2, committed) is now inert/unused but harmless (kept; not in SUPPORTED_COINS, never instantiated). The ZIP-243 signer (Tasks 4/5/6) is STILL needed for ZCL/YEC sends.
+- **New task N1: show current synced block height per coin in the Balance screen** so users can tell when a wallet is fully synced. BitFamily coins: `WalletPocketHD.getLastBlockSeenHeight()` vs `ServerClient.getHeight()`. ZEC: SDK sync progress/height.
+- **ZCL params verified** against github.com/ZclassicCommunity/zclassic chainparams.cpp (2026-07-04): PUBKEY 0x1CB8 (t1), SCRIPT 0x1CBD (t3), bip44 147, P2P 8033. Sapling branch 0x76B809BB (upgrades.cpp / vectors). Community also building `zclassic23` (C node). **Still need a LIVE ZCL ElectrumX host** — repo/community servers dead; source from t.me/zclassic_chat.
+
 ## Phasing (each phase ships independently)
 
 | Phase | Tasks | Deliverable |

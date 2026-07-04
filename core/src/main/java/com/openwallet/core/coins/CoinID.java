@@ -30,6 +30,7 @@ public enum CoinID {
     // and bip44Index 133 with it by design (see ZcashTransparentMain). Never added
     // to Constants.SUPPORTED_COINS; auto-managed and fused into the ZEC screen.
     ZCASH_TRANSPARENT_MAIN(ZcashTransparentMain.get()),
+    ZCLASSIC_MAIN(ZclassicMain.get()),
     BITCOIN_MAIN(BitcoinMain.get()),
     BITCOIN_TEST(BitcoinTest.get()),
     LITECOIN_MAIN(LitecoinMain.get()),
