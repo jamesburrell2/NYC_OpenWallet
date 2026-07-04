@@ -74,6 +74,7 @@ public class SetPasswordFragment extends Fragment {
 
         password1 = (EditText) view.findViewById(R.id.password1);
         password2 = (EditText) view.findViewById(R.id.password2);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(password1, password2);
 
         password1.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override

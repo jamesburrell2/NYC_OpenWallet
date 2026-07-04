@@ -136,6 +136,7 @@ public class SweepWalletFragment extends Fragment {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_sweep, container, false);
         ButterKnife.bind(this, view);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(password);
 
         if (getArguments().containsKey(Constants.ARG_PRIVATE_KEY)) {
             privateKeyText.setText(getArguments().getString(Constants.ARG_PRIVATE_KEY));

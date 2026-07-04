@@ -63,6 +63,7 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
         final View view = inflater.inflate(R.layout.add_account_dialog, null);
         final TextView passwordMessage = ButterKnife.findById(view, R.id.password_message);
         final EditText password = ButterKnife.findById(view, R.id.password);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(password);
         final EditText description = ButterKnife.findById(view, R.id.edit_account_description);
         final TextView advancedToggle = ButterKnife.findById(view, R.id.advanced_settings_toggle);
         final View advancedPanel = ButterKnife.findById(view, R.id.advanced_settings_panel);

@@ -213,6 +213,7 @@ public class MakeTransactionFragment extends Fragment {
                              Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_make_transaction, container, false);
         ButterKnife.bind(this, view);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(passwordView);
 
         if (error != null) return view;
 

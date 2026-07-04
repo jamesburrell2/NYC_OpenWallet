@@ -65,6 +65,7 @@ public class PasswordConfirmationFragment extends Fragment {
         }
 
         final EditText password = (EditText) view.findViewById(R.id.password);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(password);
 
         view.findViewById(R.id.button_confirm).setOnClickListener(new View.OnClickListener() {
             @Override

@@ -45,6 +45,8 @@ public class UnlockWalletDialog extends DialogFragment {
         final LayoutInflater inflater = LayoutInflater.from(getActivity());
         final View view = inflater.inflate(R.layout.get_password_dialog, null);
         passwordView = (TextView) view.findViewById(R.id.password);
+        com.openwallet.wallet.util.PasswordVisibilityToggle.attach(
+                (android.widget.EditText) passwordView);
 
         return new DialogBuilder(getActivity())
                 .setTitle(R.string.unlock_wallet_title)
