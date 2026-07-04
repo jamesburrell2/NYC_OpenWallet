@@ -28,6 +28,21 @@ Pin to ZipherX v1.1.0. SHA-256:
 - [ ] **T6 — UI**: receive (t + shielded addresses), balance (reuses N1 sync %), send (transparent + shielded). Add ZCL to `Constants.SUPPORTED_COINS` + icon + explorer.
 - [ ] **T7 — Device QA** on Pixel Fold (arm64): add ZCL, sync via P2P (peer count > 0), receive, send a dust tx, verify on a ZCL explorer.
 
+## Mapped FFI API (uniffi.zipherx, from generated zipherx.kt — verified 2026-07-04)
+
+Lifecycle: `setPlatformStorage(cb)` → `initializeRuntime()` → `initializeWallet(WalletConfigFfi)` → `restoreWallet(words: List<String>)` → `startSync(SyncProgressCallback)`. Then `getBalance()`, `getTransactionHistory(limit,offset)`, `sendTransparentWithProgress(...)`. `stopSync()`, `getSyncProgress(): Double`, `getConnectedPeerCount()`, `addCustomPeer(host,port)`.
+
+- **`WalletConfigFfi`**(`dbPath`, `headerStorePath`, `deltaStoreDir`, `spendParamsPath`, `outputParamsPath`, `accountIndex: UInt`, `dbEncryptionKey: List<UByte>?`, `boostCacheDir: String?`). Paths live under the app's files dir.
+- **`PlatformStorageCallback`** (APP MUST IMPLEMENT): `loadKey(key): List<UByte>?`, `storeKey(key,value): Boolean`, `deleteKey(key): Boolean`, `hasKey(key): Boolean`. Back with EncryptedSharedPreferences/files. SOC-2: this stores key material — encrypt at rest, never log.
+- **`SyncProgressCallback`**: `onProgress(phase, current, target)`, `onComplete(height)`, `onError(message)`, `onMempoolTx(txid, amount)`.
+- **`BalanceInfo`**(total: ULong, spendable, noteCount, spendableNoteCount). **`TransactionDisplayFfi`**(txid, txType, amount, fee, address?, memo?, confirmations, height, timestamp).
+- Kotlin unsigned types (UByte/ULong) at the boundary — convert to Long/ByteArray for the Java wallet layer.
+
+### Key design decisions before T3
+1. **Sapling params**: shielded send needs `sapling-spend.params` (~48 MB) + `sapling-output.params` (~3.6 MB). **First cut = TRANSPARENT-ONLY** (skip params; only `sendTransparentWithProgress`) to avoid a 50 MB download/bundle. Add shielded later. Confirm `initializeWallet` tolerates missing param files when only doing transparent ops (device test).
+2. **Storage backend**: implement `PlatformStorageCallback` over `androidx.security:security-crypto` EncryptedSharedPreferences (already a dep).
+3. **Seed source**: reuse the wallet's existing BIP39 seed (same seed as other coins) via `restoreWallet(words)` — ZCL account rides the one wallet seed, like ZEC.
+
 ## Notes / risks
 - Supersedes the ElectrumX `ZclassicMain` (`87d38ff`) and the ZIP-243 signer *for ZCL* — the signer stays for YEC.
 - ZipherX is ZCL-only; YEC still needs its own path (Tasks 10–11).
