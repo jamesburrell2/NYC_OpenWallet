@@ -222,13 +222,14 @@ public class RestoreFragment extends Fragment {
             clearError(errorMnemonicΜessage);
             isSeedValid = true;
         } catch (MnemonicException.MnemonicChecksumException e) {
-            log.info("Checksum error in seed: {}", e.getMessage());
+            // SOC-2: never log mnemonic/seed material. e.getMessage() can echo seed words.
+            log.info("Checksum error in seed");
             setError(errorMnemonicΜessage, R.string.restore_error_checksum);
         } catch (MnemonicException.MnemonicWordException e) {
-            log.info("Unknown words in seed: {}", e.getMessage());
+            log.info("Unknown word(s) in seed");
             setError(errorMnemonicΜessage, R.string.restore_error_words);
         } catch (MnemonicException e) {
-            log.info("Error verifying seed: {}", e.getMessage());
+            log.info("Error verifying seed: {}", e.getClass().getSimpleName());
             setError(errorMnemonicΜessage, R.string.restore_error, e.getMessage());
         }
 
