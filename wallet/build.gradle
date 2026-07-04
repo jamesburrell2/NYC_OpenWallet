@@ -59,6 +59,10 @@ android {
         }
         debug {
             minifyEnabled false
+            // Distinct package + label so the debug build installs SIDE-BY-SIDE with a
+            // release wallet on the same device without a signature clash or data wipe.
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
         }
     }
 }

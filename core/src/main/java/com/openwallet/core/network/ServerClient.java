@@ -67,6 +67,7 @@ public class ServerClient implements BitBlockchainConnection {
     }
     private static final Random RANDOM = new Random();
 
+
     private static final long MAX_WAIT = 300;
     private static final long CONNECTION_STABILIZATION = 30;
     private final ConnectivityHelper connectivityHelper;
