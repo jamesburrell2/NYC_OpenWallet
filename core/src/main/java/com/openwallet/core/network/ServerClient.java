@@ -336,28 +336,31 @@ public class ServerClient implements BitBlockchainConnection {
         }
     }
 
+    /**
+     * Block timestamp (unix seconds) from a raw block-header hex string. The timestamp is a
+     * little-endian uint32 at byte offset 68 of the 80-byte header (AuxPoW/Equihash headers
+     * are longer but the timestamp is still within the first 80 bytes). Falls back to now
+     * for a too-short/absent header.
+     */
+    private static long timestampFromHeaderHex(String hex) {
+        if (hex != null && hex.length() >= 160) {
+            int hi = 68 * 2;
+            long b0 = Character.digit(hex.charAt(hi),     16) << 4 | Character.digit(hex.charAt(hi + 1), 16);
+            long b1 = Character.digit(hex.charAt(hi + 2), 16) << 4 | Character.digit(hex.charAt(hi + 3), 16);
+            long b2 = Character.digit(hex.charAt(hi + 4), 16) << 4 | Character.digit(hex.charAt(hi + 5), 16);
+            long b3 = Character.digit(hex.charAt(hi + 6), 16) << 4 | Character.digit(hex.charAt(hi + 7), 16);
+            return (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 24);
+        }
+        return System.currentTimeMillis() / 1000;
+    }
+
     private BlockHeader parseBlockHeader(CoinType type, JSONObject json) throws JSONException {
         if (json.has("height")) {
             // ElectrumX 1.4+ format: {"hex": "...", "height": n}
             int blockHeight = json.getInt("height");
-            long timestamp;
-            if (json.has("hex")) {
-                String hex = json.getString("hex");
-                // Timestamp is at byte offset 68 (little-endian uint32) in the 80-byte block header.
-                // AuxPoW headers are longer but the timestamp is still in the first 80 bytes.
-                if (hex.length() >= 160) {
-                    int hi = 68 * 2;
-                    long b0 = Character.digit(hex.charAt(hi),     16) << 4 | Character.digit(hex.charAt(hi + 1), 16);
-                    long b1 = Character.digit(hex.charAt(hi + 2), 16) << 4 | Character.digit(hex.charAt(hi + 3), 16);
-                    long b2 = Character.digit(hex.charAt(hi + 4), 16) << 4 | Character.digit(hex.charAt(hi + 5), 16);
-                    long b3 = Character.digit(hex.charAt(hi + 6), 16) << 4 | Character.digit(hex.charAt(hi + 7), 16);
-                    timestamp = (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 24);
-                } else {
-                    timestamp = System.currentTimeMillis() / 1000;
-                }
-            } else {
-                timestamp = System.currentTimeMillis() / 1000;
-            }
+            long timestamp = json.has("hex")
+                    ? timestampFromHeaderHex(json.getString("hex"))
+                    : System.currentTimeMillis() / 1000;
             return new BlockHeader(type, timestamp, blockHeight);
         } else {
             // Legacy ElectrumX format: {"block_height": n, "timestamp": n, ...}
@@ -683,7 +686,11 @@ public class ServerClient implements BitBlockchainConnection {
     public void getBlock(final int height, final TransactionEventListener<BitTransaction> listener) {
         checkNotNull(stratumClient);
 
-        final CallMessage message = new CallMessage("blockchain.block.get_header", height);
+        // Electrum protocol 1.4 removed "blockchain.block.get_header" (which returned a JSON
+        // dict). Its replacement "blockchain.block.header" returns the raw block-header hex.
+        // Using the old method made every modern ElectrumX/electrs server answer
+        // {"code":-32601,"unknown method"} — which showed as "No connection" for BTC/LTC.
+        final CallMessage message = new CallMessage("blockchain.block.header", height);
 
         final ListenableFuture<ResultMessage> result = stratumClient.call(message);
 
@@ -691,10 +698,11 @@ public class ServerClient implements BitBlockchainConnection {
             @Override
             public void onSuccess(ResultMessage result) {
                 try {
-                    BlockHeader header = parseBlockHeader(type, result.getResult().getJSONObject(0));
+                    String hex = result.getResult().getString(0);
+                    BlockHeader header = new BlockHeader(type, timestampFromHeaderHex(hex), height);
                     listener.onBlockUpdate(header);
                 } catch (JSONException e) {
-                    log.error("Unexpected JSON format", e);
+                    log.error("Unexpected block.header format");
                 }
             }
 
@@ -703,7 +711,7 @@ public class ServerClient implements BitBlockchainConnection {
                 if (t instanceof CancellationException) {
                     log.debug("Canceling {} call", message.getMethod());
                 } else {
-                    log.error("Could not get reply for blockchain.block.get_header", t);
+                    log.error("Could not get reply for blockchain.block.header", t);
                 }
             }
         }, Threading.USER_THREAD);
