@@ -1224,19 +1224,20 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
 
     @Override
     public void onConnection(BlockchainConnection blockchainConnection) {
+        final boolean reconcileUnspent;
         lock.lock();
         try {
             this.blockchainConnection = (BitBlockchainConnection) blockchainConnection;
-            clearTransientState();
-            // If no UTXOs are loaded (e.g. wallet file was saved with an empty UTXO set while
-            // address statuses were already persisted), the cached statuses would match the
-            // server's reply and onAddressStatusUpdate() would skip the UTXO fetch entirely,
-            // leaving the balance stuck at zero.  Clearing the cached statuses forces every
-            // address to appear "changed" on the next server reply so UTXOs are always fetched
-            // when the in-memory UTXO set is empty.
-            if (unspentOutputs.isEmpty()) {
-                addressesStatus.clear();
-            }
+            clearTransientState(); // clears subscription tracking + in-flight; NOT addressesStatus
+            // Do NOT wipe committed addressesStatus on reconnect. On a flaky link every
+            // reconnect would otherwise make all committed addresses appear "changed" and
+            // re-fetch their history, restarting discovery each time the link flaps.
+            // Instead, if we have committed statuses but no UTXOs in memory yet (e.g. a wallet
+            // file saved with an empty UTXO set while statuses were already persisted, or the
+            // initial sync of a busy account before its first UTXO commits), reconcile UTXOs
+            // directly for the committed addresses so the balance is not stuck at zero — the
+            // case the old addressesStatus.clear() worked around.
+            reconcileUnspent = unspentOutputs.isEmpty() && !addressesStatus.isEmpty();
             queueOnConnectivity();
         } finally {
             lock.unlock();
@@ -1246,6 +1247,44 @@ abstract public class TransactionWatcherWallet extends AbstractWallet<BitTransac
         // keep the lock held for minutes, starving UI-thread reads into ANRs.
         subscribeToBlockchain();
         subscribeToAddressesIfNeeded();
+        if (reconcileUnspent) {
+            reconcileUnspentForCommittedAddresses();
+        }
+    }
+
+    /**
+     * Re-fetch UTXOs (only) for every address with a committed non-null status,
+     * without discarding the committed status (so history is not re-fetched).
+     * Used on reconnect when the in-memory UTXO set is empty but statuses are
+     * already committed, to rebuild the UTXO set without restarting discovery.
+     *
+     * <p>Statuses are registered under the lock; the actual {@code getUnspentTx}
+     * calls are blocking socket writes and therefore run outside the lock, as
+     * everywhere else in this class (see {@link #onConnection}).
+     */
+    private void reconcileUnspentForCommittedAddresses() {
+        final BitBlockchainConnection conn;
+        final List<AddressStatus> toReconcile = new java.util.ArrayList<>();
+        lock.lock();
+        try {
+            conn = blockchainConnection;
+            if (conn == null) return;
+            for (Map.Entry<AbstractAddress, String> e : addressesStatus.entrySet()) {
+                if (e.getValue() == null) continue;
+                AddressStatus s = new AddressStatus(e.getKey(), e.getValue());
+                // Register so onUnspentTransactionUpdate's updatingStatus.equals(status)
+                // guard accepts the reply (clearTransientState() cleared statusPendingUpdates).
+                registerStatusForUpdate(s);
+                toReconcile.add(s);
+            }
+        } finally {
+            lock.unlock();
+        }
+        // Blocking socket writes — keep outside the pocket lock (see onConnection).
+        // Fetch unspent only; history is already committed so it must not be re-fetched.
+        for (AddressStatus s : toReconcile) {
+            conn.getUnspentTx(s, this);
+        }
     }
 
     @Override
