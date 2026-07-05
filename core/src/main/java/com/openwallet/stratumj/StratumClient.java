@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -64,6 +65,15 @@ public class StratumClient extends AbstractExecutionThreadService {
     private Socket socket;
     @VisibleForTesting DataOutputStream toServer;
     BufferedReader fromServer;
+
+    /** Serializes writes to {@link #toServer}: the socket is written from multiple
+     * threads (the ping timer, per-pocket subscribe loops), and interleaved
+     * {@code writeBytes} corrupts the line-delimited JSON, making servers drop us. */
+    private final Object writeLock = new Object();
+
+    /** Guards {@link #triggerShutdown()} so a single broken socket can't cascade
+     * into thousands of redundant shutdowns (one per failing in-flight write). */
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     final private ExecutorService pool = Executors.newFixedThreadPool(NUM_OF_WORKERS);
 
@@ -201,6 +211,12 @@ public class StratumClient extends AbstractExecutionThreadService {
 
     @Override
     protected void triggerShutdown() {
+        // Idempotent: only the first caller tears down. Without this guard, a
+        // broken socket makes every in-flight write's catch block call this,
+        // producing thousands of shutdowns and cancelling all pending subscribes.
+        if (!shuttingDown.compareAndSet(false, true)) {
+            return;
+        }
         log.info("Shutting down {}", serverAddress);
         disconnect();
         pool.shutdownNow();
@@ -301,12 +317,24 @@ public class StratumClient extends AbstractExecutionThreadService {
 
         message.setId(idCounter.getAndIncrement());
 
-        try {
-            toServer.writeBytes(message.toString());
+        boolean writeFailed = false;
+        // Hold writeLock for the whole request so concurrent callers can't
+        // interleave bytes on the wire. Register the caller BEFORE writing so a
+        // fast reply can never arrive before the future is in the map.
+        synchronized (writeLock) {
             callers.put(message.getId(), future);
-        } catch (Throwable e) {
-            future.setException(e);
-            log.error("Error making a call to the server: {}", e.getMessage());
+            try {
+                toServer.writeBytes(message.toString());
+            } catch (Throwable e) {
+                callers.remove(message.getId());
+                future.setException(e);
+                log.error("Error making a call to the server: {}", e.getMessage());
+                writeFailed = true;
+            }
+        }
+
+        // Tear down once, outside the lock (triggerShutdown is idempotent).
+        if (writeFailed) {
             triggerShutdown();
         }
 
