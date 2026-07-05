@@ -342,6 +342,7 @@
     <string name="add_coin_address_type_legacy">Legacy (P2PKH)</string>
     <string name="add_coin_address_type_compatible">SegWit-compatible (P2SH-P2WPKH)</string>
     <string name="add_coin_address_type_native">Native SegWit (P2WPKH)</string>
+    <string name="add_coin_address_type_bundled">All types, Coinomi-style (44\'+49\'+84\')</string>
     <string name="add_coin_segwit_not_activated">Requires SegWit network activation</string>
     <string name="add_coin_derivation_path_label">Derivation path</string>
     <string name="add_coin_derivation_path_invalid">Invalid derivation path — using default</string>

@@ -64,8 +64,13 @@ public final class AddCoinTask extends AsyncTask<Void, Void, Void> {
                 key = wallet.getKeyCrypter().deriveKey(password);
             }
 
+            Integer bundledIndex = parseBundledIndex(customDerivationPath);
             List<ChildNumber> customPath = parseCustomPath(customDerivationPath);
-            if (customPath != null) {
+            if (bundledIndex != null) {
+                // Coinomi-style bundled account: 44'/49'/84' under one index.
+                newAccount = wallet.createBundledBitcoinAccount(type, bundledIndex, key);
+                newAccount.maybeInitializeAllKeys();
+            } else if (customPath != null) {
                 newAccount = wallet.createAccountAtCustomPath(type, customPath, true, key);
             } else {
                 newAccount = wallet.createAccount(type, true, key);
@@ -92,6 +97,22 @@ public final class AddCoinTask extends AsyncTask<Void, Void, Void> {
     @Override
     final protected void onPostExecute(Void aVoid) {
         listener.onAddCoinTaskFinished(exception, newAccount);
+    }
+
+    /**
+     * If the advanced field carries the bundled sentinel "bundled:N", return N (the account
+     * index). Otherwise return null.
+     */
+    @Nullable
+    private Integer parseBundledIndex(String value) {
+        if (value == null) return null;
+        String s = value.trim();
+        if (!s.startsWith("bundled:")) return null;
+        try {
+            return Integer.parseInt(s.substring("bundled:".length()).trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @Nullable

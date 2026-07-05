@@ -79,6 +79,7 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
         final android.widget.RadioButton addrLegacy = ButterKnife.findById(view, R.id.addr_type_legacy);
         final android.widget.RadioButton addrCompatible = ButterKnife.findById(view, R.id.addr_type_compatible);
         final android.widget.RadioButton addrNative = ButterKnife.findById(view, R.id.addr_type_native);
+        final android.widget.RadioButton addrBundled = ButterKnife.findById(view, R.id.addr_type_bundled);
         final TextView segwitNote = ButterKnife.findById(view, R.id.segwit_not_activated_note);
 
         // Helper: compute the path hint for a given BIP purpose
@@ -104,6 +105,19 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
                 addrNative.setAlpha(0.4f);
             }
         }
+        // "All types (bundled / Coinomi-style)" only makes sense for coins that support both
+        // P2SH-segwit and native-segwit in addition to legacy.
+        if (addrBundled != null) {
+            boolean supportsBundled =
+                    addrTypes.contains(com.openwallet.core.coins.AddressType.COMPATIBLE)
+                    && addrTypes.contains(com.openwallet.core.coins.AddressType.NATIVE_SEGWIT);
+            addrBundled.setVisibility(supportsBundled ? View.VISIBLE : View.GONE);
+            if (supportsBundled && !segwitActivated) {
+                addrBundled.setEnabled(false);
+                addrBundled.setAlpha(0.4f);
+            }
+        }
+
         // Show orange warning note if coin has SegWit types but activation is pending
         if (segwitNote != null) {
             boolean hasSegwitTypes = addrTypes.contains(com.openwallet.core.coins.AddressType.COMPATIBLE)
@@ -132,6 +146,12 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
             addrTypeGroup.setOnCheckedChangeListener((group, checkedId) -> {
                 // Only update if user hasn't typed a custom path
                 if (!customPathInput.getText().toString().trim().isEmpty()) return;
+                if (checkedId == R.id.addr_type_bundled) {
+                    // For a bundled account only the account index is used; the three purpose
+                    // paths (44'/49'/84') are derived automatically.
+                    customPathInput.setHint("m/{44',49',84'}/" + bip44Idx + "'/0'");
+                    return;
+                }
                 int purpose = 44;
                 if (checkedId == R.id.addr_type_compatible) {
                     purpose = 49;
@@ -180,6 +200,11 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
                         if (listener != null) {
                             String customPath = (customPathInput != null)
                                     ? customPathInput.getText().toString().trim() : "";
+                            // For a bundled account, signal it with a "bundled:N" sentinel where
+                            // N is the account index parsed from the advanced field (default 0).
+                            if (addrBundled != null && addrBundled.isChecked()) {
+                                customPath = "bundled:" + parseAccountIndex(customPath);
+                            }
                             listener.addCoin(type, description.getText().toString(),
                                     password.getText(), customPath);
                         }
@@ -198,6 +223,27 @@ public class ConfirmAddCoinUnlockWalletDialog extends DialogFragment {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Parse the account index for a bundled account from the advanced field. Accepts a bare
+     * number ("7") or a full path whose last hardened component is the index ("m/84'/0'/7'").
+     * Defaults to 0 when empty or unparseable.
+     */
+    private int parseAccountIndex(String input) {
+        if (input == null) return 0;
+        String s = input.trim();
+        if (s.isEmpty()) return 0;
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException ignored) {
+            // Not a bare number — try to read the last index of a full path.
+        }
+        List<ChildNumber> path = parseUserPath(s);
+        if (path != null && !path.isEmpty()) {
+            return path.get(path.size() - 1).num();
+        }
+        return 0;
     }
 
     public interface Listener {

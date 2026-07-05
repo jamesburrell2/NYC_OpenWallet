@@ -103,6 +103,12 @@
                     android:layout_height="wrap_content"
                     android:text="@string/add_coin_address_type_native" />
 
+                <RadioButton
+                    android:id="@+id/addr_type_bundled"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/add_coin_address_type_bundled" />
+
             </RadioGroup>
 
             <TextView
