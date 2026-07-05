@@ -611,22 +611,14 @@ public class TransactionCreator {
                     }
                     checkNotNull(key, "Coin selection includes unspendable outputs");
                 } else if (script.isPayToScriptHash()) {
-                    // P2SH-P2WPKH: find the key whose P2WPKH redeemScript hashes to the output's scriptHash
-                    byte[] outputScriptHash = script.getPubKeyHash(); // for P2SH this is the 20-byte script hash
-                    key = findKeyForP2shP2wpkh(outputScriptHash);
-                    if (key != null) {
-                        byte[] pubKeyHash = key.getPubKeyHash();
-                        // redeemScript = OP_0 <20-byte-pubKeyHash>
-                        byte[] rawRedeem = new byte[22];
-                        rawRedeem[0] = 0x00;
-                        rawRedeem[1] = 0x14;
-                        System.arraycopy(pubKeyHash, 0, rawRedeem, 2, 20);
-                        redeemScript = new Script(rawRedeem);
-                    } else {
-                        // Unknown P2SH — use a conservative estimate: P2SH-P2WPKH input ≈ 297 bytes
-                        size += 297;
-                        continue;
-                    }
+                    // P2SH-P2WPKH (wrapped SegWit): bitcoinj's Script sizing cannot handle a
+                    // witness redeem script (getNumberOfBytesRequiredToSpend throws
+                    // "Unsupported script type"), so use a conservative fixed byte estimate.
+                    // findKeyForP2shP2wpkh is still consulted to confirm we own the output.
+                    byte[] outputScriptHash = script.getPubKeyHash(); // 20-byte script hash
+                    findKeyForP2shP2wpkh(outputScriptHash);
+                    size += 297; // P2SH-P2WPKH input ≈ 297 bytes
+                    continue;
                 }
                 size += script.getNumberOfBytesRequiredToSpend(key, redeemScript);
             } catch (ScriptException e) {
@@ -643,6 +635,14 @@ public class TransactionCreator {
      * Returns null if no matching key is found.
      */
     private ECKey findKeyForP2shP2wpkh(byte[] outputScriptHash) {
+        // Preferred path: ask the account to resolve the P2SH-P2WPKH key directly. This spans
+        // every branch of a bundled account, where the P2SH address's hash160 is a script hash
+        // (not a pubkey hash) and so can't be recovered by scanning getActiveAddresses.
+        if (account instanceof WalletPocketHD) {
+            ECKey key = ((WalletPocketHD) account).findKeyForP2shP2wpkhScriptHash(outputScriptHash);
+            if (key != null) return key;
+        }
+        // Fallback: scan active (legacy) addresses, preserving single-path behaviour.
         for (AbstractAddress addr : account.getActiveAddresses()) {
             if (!(addr instanceof com.openwallet.core.wallet.families.bitcoin.BitAddress)) continue;
             com.openwallet.core.wallet.families.bitcoin.BitAddress ba =

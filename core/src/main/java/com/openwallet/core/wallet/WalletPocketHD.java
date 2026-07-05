@@ -88,8 +88,12 @@ public class WalletPocketHD extends BitWalletBase {
     // keep their historical "emit every supported script type from the one key" behaviour,
     // so an already-saved single-path pocket deserializes and behaves identically.
     protected final boolean bundled;
-    // Index into keychains of the default receive/change branch.
+    // Index into keychains of the default receive branch (native-segwit if present).
     private final int receiveKeychainIndex;
+    // Index into keychains used for change. Change must be a legacy/P2SH BitAddress so it
+    // flows through TransactionCreator's change-output path (which expects an
+    // org.bitcoinj.core.Address); the legacy (44') branch is watched, spendable and castable.
+    private final int changeKeychainIndex;
 
     public WalletPocketHD(DeterministicKey rootKey, CoinType coinType,
                           @Nullable KeyCrypter keyCrypter, @Nullable KeyParameter key) {
@@ -110,6 +114,7 @@ public class WalletPocketHD extends BitWalletBase {
         this.purposes = ImmutableList.of(AddressType.LEGACY);
         this.bundled = false;
         this.receiveKeychainIndex = 0;
+        this.changeKeychainIndex = 0;
     }
 
     /**
@@ -150,6 +155,7 @@ public class WalletPocketHD extends BitWalletBase {
         this.purposes = ImmutableList.copyOf(purposes);
         this.bundled = keychains.size() > 1;
         this.receiveKeychainIndex = bundled ? defaultReceiveIndex(purposes) : 0;
+        this.changeKeychainIndex = bundled ? defaultChangeIndex(purposes, receiveKeychainIndex) : 0;
         this.keys = this.keychains.get(receiveKeychainIndex);
     }
 
@@ -157,6 +163,18 @@ public class WalletPocketHD extends BitWalletBase {
     private static int defaultReceiveIndex(List<AddressType> purposes) {
         int idx = purposes.indexOf(AddressType.NATIVE_SEGWIT);
         return idx >= 0 ? idx : 0;
+    }
+
+    /** Prefer the legacy branch for change (a plain BitAddress); fall back to receive. */
+    private static int defaultChangeIndex(List<AddressType> purposes, int receiveIndex) {
+        int idx = purposes.indexOf(AddressType.LEGACY);
+        return idx >= 0 ? idx : receiveIndex;
+    }
+
+    /** Keychain index to hand out addresses from for the given purpose. */
+    private int keychainIndexForPurpose(SimpleHDKeyChain.KeyPurpose purpose) {
+        if (!bundled) return 0;
+        return purpose == CHANGE ? changeKeychainIndex : receiveKeychainIndex;
     }
 
     /** Deterministic id for a bundled pocket, derived from the default receive branch. */
@@ -383,14 +401,16 @@ public class WalletPocketHD extends BitWalletBase {
         // OP_0 PUSH_20 <pubKeyHash>, and the scriptHash = hash160(redeemScript).
         lock.lock();
         try {
-            for (DeterministicKey key : keys.getActiveKeys()) {
-                byte[] pubKeyHash = key.getPubKeyHash();
-                byte[] redeemScript = new byte[22];
-                redeemScript[0] = 0x00; // OP_0
-                redeemScript[1] = 0x14; // PUSH 20 bytes
-                System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
-                byte[] scriptHash = org.bitcoinj.core.Utils.sha256hash160(redeemScript);
-                if (java.util.Arrays.equals(scriptHash, payToScriptHash)) return true;
+            for (SimpleHDKeyChain keychain : keychains) {
+                for (DeterministicKey key : keychain.getActiveKeys()) {
+                    byte[] pubKeyHash = key.getPubKeyHash();
+                    byte[] redeemScript = new byte[22];
+                    redeemScript[0] = 0x00; // OP_0
+                    redeemScript[1] = 0x14; // PUSH 20 bytes
+                    System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+                    byte[] scriptHash = org.bitcoinj.core.Utils.sha256hash160(redeemScript);
+                    if (java.util.Arrays.equals(scriptHash, payToScriptHash)) return true;
+                }
             }
             return false;
         } finally {
@@ -409,7 +429,11 @@ public class WalletPocketHD extends BitWalletBase {
     public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
         lock.lock();
         try {
-            return keys.findKeyFromPubHash(pubkeyHash);
+            for (SimpleHDKeyChain keychain : keychains) {
+                ECKey key = keychain.findKeyFromPubHash(pubkeyHash);
+                if (key != null) return key;
+            }
+            return null;
         } finally {
             lock.unlock();
         }
@@ -424,7 +448,11 @@ public class WalletPocketHD extends BitWalletBase {
     public ECKey findKeyFromPubKey(byte[] pubkey) {
         lock.lock();
         try {
-            return keys.findKeyFromPubKey(pubkey);
+            for (SimpleHDKeyChain keychain : keychains) {
+                ECKey key = keychain.findKeyFromPubKey(pubkey);
+                if (key != null) return key;
+            }
+            return null;
         } finally {
             lock.unlock();
         }
@@ -433,7 +461,40 @@ public class WalletPocketHD extends BitWalletBase {
     @Nullable
     @Override
     public RedeemData findRedeemDataFromScriptHash(byte[] bytes) {
+        // bitcoinj's RedeemData models P2SH-multisig, not P2SH-P2WPKH, so we do not vend
+        // it here. P2SH-segwit redemption is resolved via findKeyForP2shP2wpkhScriptHash().
         return null;
+    }
+
+    /**
+     * For a P2SH-P2WPKH output whose scriptHash = hash160(OP_0 PUSH_20 &lt;pubKeyHash&gt;),
+     * return the owning key across every branch (so a bundled account can spend P2SH-segwit
+     * outputs on its 49' branch). Returns null if no branch owns it.
+     */
+    @Nullable
+    public ECKey findKeyForP2shP2wpkhScriptHash(byte[] scriptHash) {
+        if (!type.getSupportedAddressTypes().contains(AddressType.COMPATIBLE)) {
+            return null;
+        }
+        lock.lock();
+        try {
+            for (SimpleHDKeyChain keychain : keychains) {
+                for (DeterministicKey key : keychain.getActiveKeys()) {
+                    byte[] pubKeyHash = key.getPubKeyHash();
+                    byte[] redeemScript = new byte[22];
+                    redeemScript[0] = 0x00; // OP_0
+                    redeemScript[1] = 0x14; // PUSH 20 bytes
+                    System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+                    byte[] hash = org.bitcoinj.core.Utils.sha256hash160(redeemScript);
+                    if (java.util.Arrays.equals(hash, scriptHash)) {
+                        return key;
+                    }
+                }
+            }
+            return null;
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -485,10 +546,11 @@ public class WalletPocketHD extends BitWalletBase {
     public AbstractAddress getLastUsedAddress(SimpleHDKeyChain.KeyPurpose purpose) {
         lock.lock();
         try {
-            DeterministicKey lastUsedKey = keys.getLastIssuedKey(purpose);
+            int idx = keychainIndexForPurpose(purpose);
+            DeterministicKey lastUsedKey = keychains.get(idx).getLastIssuedKey(purpose);
             if (lastUsedKey != null) {
                 return bundled
-                        ? type.addressFromKey(lastUsedKey, purposes.get(receiveKeychainIndex))
+                        ? type.addressFromKey(lastUsedKey, purposes.get(idx))
                         : type.addressFromKey(lastUsedKey);
             } else {
                 return null;
@@ -651,10 +713,12 @@ public class WalletPocketHD extends BitWalletBase {
     @VisibleForTesting AbstractAddress currentAddress(SimpleHDKeyChain.KeyPurpose purpose) {
         lock.lock();
         try {
-            DeterministicKey key = keys.getCurrentUnusedKey(purpose);
-            return bundled
-                    ? type.addressFromKey(key, purposes.get(receiveKeychainIndex))
-                    : type.addressFromKey(key);
+            if (!bundled) {
+                return type.addressFromKey(keys.getCurrentUnusedKey(purpose));
+            }
+            int idx = keychainIndexForPurpose(purpose);
+            DeterministicKey key = keychains.get(idx).getCurrentUnusedKey(purpose);
+            return type.addressFromKey(key, purposes.get(idx));
         } finally {
             lock.unlock();
             subscribeToAddressesIfNeeded();
@@ -669,7 +733,9 @@ public class WalletPocketHD extends BitWalletBase {
     public void maybeInitializeAllKeys() {
         lock.lock();
         try {
-            keys.maybeLookAhead();
+            for (SimpleHDKeyChain keychain : keychains) {
+                keychain.maybeLookAhead();
+            }
         } finally {
             lock.unlock();
         }
@@ -721,12 +787,30 @@ public class WalletPocketHD extends BitWalletBase {
     @Override
     public void markAddressAsUsed(AbstractAddress address) {
         checkArgument(address.getType().equals(type), "Wrong address type");
-        if (address instanceof BitAddress) {
-            markAddressAsUsed((BitAddress) address);
-        } else if (address instanceof SegwitAddress) {
-            // SegwitAddress shares the same HASH160 as the corresponding legacy key,
-            // so markPubHashAsUsed correctly advances the HD keychain.
-            keys.markPubHashAsUsed(((SegwitAddress) address).getHash160());
+        if (!bundled) {
+            // Single-path pocket: preserve the exact historical behaviour.
+            if (address instanceof BitAddress) {
+                markAddressAsUsed((BitAddress) address);
+            } else if (address instanceof SegwitAddress) {
+                // SegwitAddress shares the same HASH160 as the corresponding legacy key,
+                // so markPubHashAsUsed correctly advances the HD keychain.
+                keys.markPubHashAsUsed(((SegwitAddress) address).getHash160());
+            } else {
+                throw new IllegalArgumentException("Wrong address class: " + address.getClass());
+            }
+            return;
+        }
+        // Bundled pocket: the address may belong to any branch and, for a P2SH-segwit
+        // address, its hash160 is the redeem-script hash rather than a pubkey hash.
+        if (address instanceof SegwitAddress) {
+            markPubHashAsUsedAnyKeychain(((SegwitAddress) address).getHash160());
+        } else if (address instanceof BitAddress) {
+            BitAddress ba = (BitAddress) address;
+            if (isP2SHAddress(ba)) {
+                markP2shScriptHashAsUsed(ba.getHash160());
+            } else {
+                markPubHashAsUsedAnyKeychain(ba.getHash160());
+            }
         } else {
             throw new IllegalArgumentException("Wrong address class: " + address.getClass());
         }
@@ -734,6 +818,41 @@ public class WalletPocketHD extends BitWalletBase {
 
     public void markAddressAsUsed(BitAddress address) {
         keys.markPubHashAsUsed(address.getHash160());
+    }
+
+    /** Advance whichever branch owns the key with this pubkey hash (legacy / native-segwit). */
+    private void markPubHashAsUsedAnyKeychain(byte[] pubKeyHash) {
+        lock.lock();
+        try {
+            for (SimpleHDKeyChain keychain : keychains) {
+                if (keychain.markPubHashAsUsed(pubKeyHash)) return;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Advance whichever branch owns the key whose P2SH-P2WPKH redeem script hashes to this. */
+    private void markP2shScriptHashAsUsed(byte[] scriptHash) {
+        lock.lock();
+        try {
+            for (SimpleHDKeyChain keychain : keychains) {
+                for (DeterministicKey key : keychain.getActiveKeys()) {
+                    byte[] pubKeyHash = key.getPubKeyHash();
+                    byte[] redeemScript = new byte[22];
+                    redeemScript[0] = 0x00; // OP_0
+                    redeemScript[1] = 0x14; // PUSH 20 bytes
+                    System.arraycopy(pubKeyHash, 0, redeemScript, 2, 20);
+                    if (java.util.Arrays.equals(
+                            org.bitcoinj.core.Utils.sha256hash160(redeemScript), scriptHash)) {
+                        keychain.markKeyAsUsed(key);
+                        return;
+                    }
+                }
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
