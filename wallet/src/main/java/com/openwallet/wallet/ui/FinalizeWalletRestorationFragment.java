@@ -146,7 +146,7 @@ public class FinalizeWalletRestorationFragment extends Fragment {
         protected Wallet doInBackground(Void... params) {
             Intent intent = new Intent(CoinService.ACTION_CLEAR_CONNECTIONS, null,
                     walletApplication, CoinServiceImpl.class);
-            walletApplication.startService(intent);
+            walletApplication.safeStartService(intent);
 
             ArrayList<String> seedWords = new ArrayList<String>();
             for (String word : seed.trim().split(" ")) {

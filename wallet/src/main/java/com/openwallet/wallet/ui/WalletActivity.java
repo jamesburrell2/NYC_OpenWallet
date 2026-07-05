@@ -457,7 +457,7 @@ final public class WalletActivity extends BaseWalletActivity implements
         }
         // Open connection if needed or possible
         connectCoinIntent.putExtra(Constants.ARG_ACCOUNT_ID, accountId);
-        getWalletApplication().startService(connectCoinIntent);
+        getWalletApplication().safeStartService(connectCoinIntent);
     }
 
     private void connectAllCoinService() {
@@ -465,7 +465,7 @@ final public class WalletActivity extends BaseWalletActivity implements
             connectAllCoinIntent = new Intent(CoinService.ACTION_CONNECT_ALL_COIN, null,
                     getWalletApplication(), CoinServiceImpl.class);
         }
-        getWalletApplication().startService(connectAllCoinIntent);
+        getWalletApplication().safeStartService(connectAllCoinIntent);
     }
 
     public void restoreActionBar() {
@@ -789,7 +789,7 @@ final public class WalletActivity extends BaseWalletActivity implements
                         getWalletApplication(), CoinServiceImpl.class);
                 intent.putExtra(Constants.ARG_ACCOUNT_ID, lastAccountId);
             }
-            getWalletApplication().startService(intent);
+            getWalletApplication().safeStartService(intent);
         }
     }
 

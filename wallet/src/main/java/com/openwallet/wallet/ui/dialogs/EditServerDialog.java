@@ -123,9 +123,11 @@ public class EditServerDialog extends DialogFragment {
     private void restartCoinService() {
         Activity activity = getActivity();
         if (activity == null) return;
-        activity.startService(new Intent(CoinService.ACTION_CLEAR_CONNECTIONS,
+        com.openwallet.wallet.WalletApplication app =
+                (com.openwallet.wallet.WalletApplication) activity.getApplication();
+        app.safeStartService(new Intent(CoinService.ACTION_CLEAR_CONNECTIONS,
                 null, activity, CoinServiceImpl.class));
-        activity.startService(new Intent(CoinService.ACTION_CONNECT_ALL_COIN,
+        app.safeStartService(new Intent(CoinService.ACTION_CONNECT_ALL_COIN,
                 null, activity, CoinServiceImpl.class));
     }
 }

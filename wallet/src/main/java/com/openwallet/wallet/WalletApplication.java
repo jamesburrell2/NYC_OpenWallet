@@ -456,15 +456,23 @@ public class WalletApplication extends Application {
                 intent = coinServiceIntent;
                 break;
         }
+        safeStartService(intent);
+    }
+
+    /**
+     * Starts a service, tolerating the background-start restriction. On Android 8+
+     * (and strictly enforced on 12+, where {@code BackgroundServiceStartNotAllowedException}
+     * extends {@link IllegalStateException}) a background {@code startService} throws.
+     * This is reached from lifecycle callbacks (e.g. {@code onResume} right after a
+     * process restart or during a background/foreground race), so swallow it rather
+     * than crash — the service starts on the next legitimate foreground event.
+     */
+    public void safeStartService(Intent intent) {
         try {
             startService(intent);
         } catch (IllegalStateException e) {
-            // Android 12+ (BackgroundServiceStartNotAllowedException extends this):
-            // the app was briefly treated as background during a lifecycle edge (e.g.
-            // resume right after process restart). Don't crash — the service starts on
-            // the next foreground event (onResume/tick) instead.
-            log.warn("Deferred CoinService start; app treated as background: {}",
-                    e.getClass().getSimpleName());
+            log.warn("Deferred service start; app treated as background: {} ({})",
+                    intent != null ? intent.getAction() : "null", e.getClass().getSimpleName());
         }
     }
 
