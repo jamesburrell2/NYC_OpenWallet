@@ -72,8 +72,24 @@ import static org.bitcoinj.wallet.KeyChain.KeyPurpose.REFUND;
 public class WalletPocketHD extends BitWalletBase {
     private static final Logger log = LoggerFactory.getLogger(WalletPocketHD.class);
 
+    // The default receive/change keychain. For a single-path pocket this is the only
+    // keychain; for a bundled pocket it is the native-segwit (84') branch. Kept as a
+    // field so the many existing single-path call sites remain valid.
     @VisibleForTesting
     protected SimpleHDKeyChain keys;
+
+    // Ordered, purpose-tagged keychains. A normal pocket holds exactly one (== keys) and
+    // behaves identically to before. A "bundled" pocket holds several — 44'->LEGACY,
+    // 49'->COMPATIBLE, 84'->NATIVE_SEGWIT — under one account index, matching Coinomi's
+    // per-account multi-branch layout so a single account shows the complete history.
+    protected final List<SimpleHDKeyChain> keychains;
+    protected final List<AddressType> purposes;
+    // True when this pocket bundles more than one purpose keychain. Single-keychain pockets
+    // keep their historical "emit every supported script type from the one key" behaviour,
+    // so an already-saved single-path pocket deserializes and behaves identically.
+    protected final boolean bundled;
+    // Index into keychains of the default receive/change branch.
+    private final int receiveKeychainIndex;
 
     public WalletPocketHD(DeterministicKey rootKey, CoinType coinType,
                           @Nullable KeyCrypter keyCrypter, @Nullable KeyParameter key) {
@@ -87,6 +103,86 @@ public class WalletPocketHD extends BitWalletBase {
     WalletPocketHD(String id, SimpleHDKeyChain keys, CoinType coinType) {
         super(checkNotNull(coinType), id);
         this.keys = checkNotNull(keys);
+        this.keychains = new ArrayList<>();
+        this.keychains.add(keys);
+        // Purpose is not consulted on the single-keychain (emit-all) path; LEGACY is a
+        // harmless placeholder that matches the default receive-address encoding.
+        this.purposes = ImmutableList.of(AddressType.LEGACY);
+        this.bundled = false;
+        this.receiveKeychainIndex = 0;
+    }
+
+    /**
+     * Build a bundled pocket that tracks several purpose keychains under one account index.
+     * The purposes list is parallel to keychains (44'->LEGACY, 49'->COMPATIBLE,
+     * 84'->NATIVE_SEGWIT). The native-segwit branch, if present, is the default receive
+     * branch; otherwise the first keychain is used.
+     */
+    WalletPocketHD(List<SimpleHDKeyChain> keychains, List<AddressType> purposes,
+                   CoinType coinType, @Nullable KeyCrypter keyCrypter, @Nullable KeyParameter key) {
+        this(bundledId(coinType, keychains, purposes), keychains, purposes, coinType);
+        // Encrypt in-place to mirror the single-path constructor, which encrypts its
+        // keychain up front. Callers that create then separately encrypt() are unaffected
+        // because the second encrypt is skipped once isEncrypted() is true.
+        if (keyCrypter != null) {
+            lock.lock();
+            try {
+                for (int i = 0; i < this.keychains.size(); i++) {
+                    SimpleHDKeyChain kc = this.keychains.get(i);
+                    if (!kc.isEncrypted()) {
+                        this.keychains.set(i, kc.toEncrypted(keyCrypter, checkNotNull(key)));
+                    }
+                }
+                this.keys = this.keychains.get(receiveKeychainIndex);
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+    private WalletPocketHD(String id, List<SimpleHDKeyChain> keychains,
+                           List<AddressType> purposes, CoinType coinType) {
+        super(checkNotNull(coinType), id);
+        checkArgument(!keychains.isEmpty(), "A pocket needs at least one keychain");
+        checkArgument(keychains.size() == purposes.size(),
+                "keychains and purposes must be parallel");
+        this.keychains = new ArrayList<>(keychains);
+        this.purposes = ImmutableList.copyOf(purposes);
+        this.bundled = keychains.size() > 1;
+        this.receiveKeychainIndex = bundled ? defaultReceiveIndex(purposes) : 0;
+        this.keys = this.keychains.get(receiveKeychainIndex);
+    }
+
+    /** Prefer the native-segwit branch for receiving; fall back to the first keychain. */
+    private static int defaultReceiveIndex(List<AddressType> purposes) {
+        int idx = purposes.indexOf(AddressType.NATIVE_SEGWIT);
+        return idx >= 0 ? idx : 0;
+    }
+
+    /** Deterministic id for a bundled pocket, derived from the default receive branch. */
+    private static String bundledId(CoinType coinType, List<SimpleHDKeyChain> keychains,
+                                    List<AddressType> purposes) {
+        int idx = keychains.size() > 1 ? defaultReceiveIndex(purposes) : 0;
+        return KeyUtils.getPublicKeyId(coinType, keychains.get(idx).getRootKey().getPubKey());
+    }
+
+    /** Ordered list of this pocket's purpose keychains (one for a single-path pocket). */
+    public List<SimpleHDKeyChain> getKeychains() {
+        lock.lock();
+        try {
+            return ImmutableList.copyOf(keychains);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Purpose (script type) of the keychain at the given index. */
+    public AddressType getPurpose(int keychainIndex) {
+        return purposes.get(keychainIndex);
+    }
+
+    public boolean isBundled() {
+        return bundled;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,8 +211,29 @@ public class WalletPocketHD extends BitWalletBase {
     public String getDerivationPath() {
         lock.lock();
         try {
+            List<ChildNumber> path = keys.getRootKey().getPath();
+            if (bundled && !path.isEmpty()) {
+                // Show the shared account path with the set of bundled purposes, e.g.
+                // m/{44',49',84'}/0'/7'.
+                StringBuilder purposeSet = new StringBuilder("{");
+                for (int i = 0; i < keychains.size(); i++) {
+                    if (i > 0) purposeSet.append(',');
+                    List<ChildNumber> p = keychains.get(i).getRootKey().getPath();
+                    ChildNumber purpose = p.get(0);
+                    purposeSet.append(purpose.num());
+                    if (purpose.isHardened()) purposeSet.append('\'');
+                }
+                purposeSet.append('}');
+                StringBuilder sb = new StringBuilder("m/").append(purposeSet);
+                for (int i = 1; i < path.size(); i++) {
+                    ChildNumber cn = path.get(i);
+                    sb.append('/').append(cn.num());
+                    if (cn.isHardened()) sb.append('\'');
+                }
+                return sb.toString();
+            }
             StringBuilder sb = new StringBuilder("m");
-            for (ChildNumber cn : keys.getRootKey().getPath()) {
+            for (ChildNumber cn : path) {
                 sb.append('/').append(cn.num());
                 if (cn.isHardened()) sb.append('\'');
             }
@@ -135,7 +252,18 @@ public class WalletPocketHD extends BitWalletBase {
     List<Protos.Key> serializeKeychainToProtobuf() {
         lock.lock();
         try {
-            return keys.toProtobuf();
+            // Concatenate each keychain's key tree in order. Each keychain begins with its
+            // own account-level root key (a distinct 44'/49'/84' path prefix), which lets
+            // the loader split them back apart. For a single-path pocket this is exactly the
+            // old single-keychain output, so the wallet-file format is unchanged.
+            if (keychains.size() == 1) {
+                return keys.toProtobuf();
+            }
+            ArrayList<Protos.Key> all = new ArrayList<>();
+            for (SimpleHDKeyChain kc : keychains) {
+                all.addAll(kc.toProtobuf());
+            }
+            return all;
         } finally {
             lock.unlock();
         }
@@ -201,7 +329,10 @@ public class WalletPocketHD extends BitWalletBase {
 
         lock.lock();
         try {
-            this.keys = this.keys.toEncrypted(keyCrypter, aesKey);
+            for (int i = 0; i < keychains.size(); i++) {
+                keychains.set(i, keychains.get(i).toEncrypted(keyCrypter, aesKey));
+            }
+            this.keys = keychains.get(receiveKeychainIndex);
         } finally {
             lock.unlock();
         }
@@ -219,7 +350,10 @@ public class WalletPocketHD extends BitWalletBase {
 
         lock.lock();
         try {
-            this.keys = this.keys.toDecrypted(aesKey);
+            for (int i = 0; i < keychains.size(); i++) {
+                keychains.set(i, keychains.get(i).toDecrypted(aesKey));
+            }
+            this.keys = keychains.get(receiveKeychainIndex);
         } finally {
             lock.unlock();
         }
@@ -353,7 +487,9 @@ public class WalletPocketHD extends BitWalletBase {
         try {
             DeterministicKey lastUsedKey = keys.getLastIssuedKey(purpose);
             if (lastUsedKey != null) {
-                return type.addressFromKey(lastUsedKey);
+                return bundled
+                        ? type.addressFromKey(lastUsedKey, purposes.get(receiveKeychainIndex))
+                        : type.addressFromKey(lastUsedKey);
             } else {
                 return null;
             }
@@ -515,7 +651,10 @@ public class WalletPocketHD extends BitWalletBase {
     @VisibleForTesting AbstractAddress currentAddress(SimpleHDKeyChain.KeyPurpose purpose) {
         lock.lock();
         try {
-            return type.addressFromKey(keys.getCurrentUnusedKey(purpose));
+            DeterministicKey key = keys.getCurrentUnusedKey(purpose);
+            return bundled
+                    ? type.addressFromKey(key, purposes.get(receiveKeychainIndex))
+                    : type.addressFromKey(key);
         } finally {
             lock.unlock();
             subscribeToAddressesIfNeeded();
@@ -546,18 +685,32 @@ public class WalletPocketHD extends BitWalletBase {
         lock.lock();
         try {
             ImmutableList.Builder<AbstractAddress> activeAddresses = ImmutableList.builder();
-            Set<AddressType> supported = type.getSupportedAddressTypes();
-            for (DeterministicKey key : keys.getActiveKeys()) {
-                // Always emit legacy (all coins support it)
-                activeAddresses.add(type.addressFromKey(key, AddressType.LEGACY));
-                // Emit SegWit address types for coins that support them
-                if (supported.contains(AddressType.COMPATIBLE)) {
-                    activeAddresses.add(type.addressFromKey(key, AddressType.COMPATIBLE));
+            if (bundled) {
+                // Each branch has its OWN keys; emit only that branch's script type so the
+                // watched addresses match Coinomi's per-purpose derivation exactly.
+                for (int i = 0; i < keychains.size(); i++) {
+                    AddressType purpose = purposes.get(i);
+                    for (DeterministicKey key : keychains.get(i).getActiveKeys()) {
+                        activeAddresses.add(type.addressFromKey(key, purpose));
+                    }
                 }
-                if (supported.contains(AddressType.NATIVE_SEGWIT)) {
-                    activeAddresses.add(type.addressFromKey(key, AddressType.NATIVE_SEGWIT));
+            } else {
+                // Single-path pocket: keep the historical behaviour of emitting every
+                // supported script type from the one key, so already-saved pockets behave
+                // identically and no previously-watched address is dropped.
+                Set<AddressType> supported = type.getSupportedAddressTypes();
+                for (DeterministicKey key : keys.getActiveKeys()) {
+                    // Always emit legacy (all coins support it)
+                    activeAddresses.add(type.addressFromKey(key, AddressType.LEGACY));
+                    // Emit SegWit address types for coins that support them
+                    if (supported.contains(AddressType.COMPATIBLE)) {
+                        activeAddresses.add(type.addressFromKey(key, AddressType.COMPATIBLE));
+                    }
+                    if (supported.contains(AddressType.NATIVE_SEGWIT)) {
+                        activeAddresses.add(type.addressFromKey(key, AddressType.NATIVE_SEGWIT));
+                    }
+                    // TAPROOT is receive/display only — not included in watch list
                 }
-                // TAPROOT is receive/display only — not included in watch list
             }
             return activeAddresses.build();
         } finally {
