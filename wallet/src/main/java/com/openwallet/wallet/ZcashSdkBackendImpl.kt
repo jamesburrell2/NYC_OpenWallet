@@ -7,6 +7,8 @@ import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.WalletInitMode
 import cash.z.ecc.android.sdk.model.Account
 import cash.z.ecc.android.sdk.model.AccountCreateSetup
+import cash.z.ecc.android.sdk.model.AccountImportSetup
+import cash.z.ecc.android.sdk.model.AccountPurpose
 import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.FirstClassByteArray
 import cash.z.ecc.android.sdk.model.TransactionOverview
@@ -50,6 +52,14 @@ class ZcashSdkBackendImpl(
         private const val KEY_SEED_FP = "seed_fingerprint"
         private const val ZCASH_BLOCK_TIME_SECONDS = 75L
         private const val ONE_DAY_SECONDS = 86_400L
+
+        // BIP-44-style account gap-limit discovery for ZEC. The SDK scans shielded AND
+        // transparent funds per account via lightwalletd, so importing accounts 0..N-1
+        // (all derived from the same seed) makes balances + tx history a UNION across every
+        // derivation path — getWalletBalances()/getTransactions() already aggregate them.
+        private const val KEY_ACCOUNT_COUNT = "zec_account_count"
+        private const val INITIAL_ACCOUNTS = 3       // always scan at least this many
+        private const val MAX_ACCOUNTS = 20          // hard cap (safety bound on discovery)
     }
 
     // Final safety net: an uncaught exception in ANY coroutine launched on this scope
@@ -239,7 +249,65 @@ class ZcashSdkBackendImpl(
             notifyUpdated()
         }
 
+        // Import additional derivation-path accounts so ALL of the user's ZEC history
+        // (shielded + transparent, across accounts) is scanned, not just account 0.
+        runCatching { ensureAccountsImported(sync) }
+            .onFailure { Log.w(TAG, "ensureAccountsImported failed: ${it.javaClass.simpleName}") }
+
         return sync
+    }
+
+    /**
+     * Ensures accounts 0..(count-1) exist in the SDK, where count is the persisted gap-limit
+     * (grown by {@link #maybeExpandAccounts}). Account 0 is created at Synchronizer.new; the
+     * rest are imported by their seed-derived UFVK with Spending purpose (spendable — the USK
+     * is re-derived per-account at send time). No PII/keys are logged.
+     */
+    private suspend fun ensureAccountsImported(sync: Synchronizer) {
+        val count = prefs().getInt(KEY_ACCOUNT_COUNT, INITIAL_ACCOUNTS)
+            .coerceIn(1, MAX_ACCOUNTS)
+        if (count <= 1) return
+        val existing = sync.getAccounts()
+        val seedFp = existing.firstOrNull()?.seedFingerprint ?: return
+        val existingIndexes = existing.mapNotNull { it.hdAccountIndex?.index }.toSet()
+        val ufvks = DerivationTool.getInstance()
+            .deriveUnifiedFullViewingKeys(seedBytes, ZcashNetwork.Mainnet, count)
+        for (i in 1 until count) {
+            if (existingIndexes.contains(i.toLong())) continue
+            runCatching {
+                sync.importAccountByUfvk(
+                    AccountImportSetup(
+                        accountName = "ZEC account $i",
+                        keySource = null,
+                        purpose = AccountPurpose.Spending(seedFp, Zip32AccountIndex.new(i.toLong())),
+                        ufvk = ufvks[i],
+                    )
+                )
+                Log.i(TAG, "Imported ZEC discovery account index $i")
+            }.onFailure { Log.w(TAG, "Import ZEC account $i failed: ${it.javaClass.simpleName}") }
+        }
+    }
+
+    /**
+     * Gap-limit expansion: once scanning has covered the chain, if the highest imported
+     * account has any transaction history, bump the persisted count so the NEXT account is
+     * imported on the following sync — converging on all used accounts (capped at MAX_ACCOUNTS).
+     */
+    private suspend fun maybeExpandAccounts(sync: Synchronizer) {
+        val count = prefs().getInt(KEY_ACCOUNT_COUNT, INITIAL_ACCOUNTS)
+        if (count >= MAX_ACCOUNTS) return
+        val accounts = sync.getAccounts()
+        val top = accounts.maxByOrNull { it.hdAccountIndex?.index ?: -1L } ?: return
+        val topIndex = top.hdAccountIndex?.index ?: return
+        if (topIndex.toInt() < count - 1) return // highest not yet imported; wait
+        val hasHistory = runCatching {
+            sync.getTransactions(top.accountUuid).first().isNotEmpty()
+        }.getOrDefault(false)
+        if (hasHistory) {
+            prefs().edit().putInt(KEY_ACCOUNT_COUNT, (count + 1).coerceAtMost(MAX_ACCOUNTS)).apply()
+            Log.i(TAG, "ZEC gap-limit: account $topIndex has history; expanding discovery")
+            ensureAccountsImported(sync)
+        }
     }
 
     /**
@@ -280,6 +348,12 @@ class ZcashSdkBackendImpl(
                 if (newPct != syncProgressPercent) {
                     syncProgressPercent = newPct
                     notifyUpdated()
+                    // When a scan pass is essentially complete, run gap-limit expansion so an
+                    // additional derivation-path account is discovered if the last one is used.
+                    if (newPct >= 100) {
+                        runCatching { maybeExpandAccounts(sync) }
+                            .onFailure { Log.w(TAG, "gap-limit expand failed: ${it.javaClass.simpleName}") }
+                    }
                 }
             }
         } }
