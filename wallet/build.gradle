@@ -15,8 +15,8 @@ android {
         applicationId "com.newyorkcoin.openwallet"
         minSdk 27
         targetSdk 34
-        versionCode 63
-        versionName "v1.8.5"
+        versionCode 64
+        versionName "v1.9.0"
         ndk {
             // ZipherX (ZCL) ships native libs only for these ABIs; the Zcash SDK also
             // targets them. minSdk 27 in 2026 makes arm64-v8a + x86_64 effectively full
