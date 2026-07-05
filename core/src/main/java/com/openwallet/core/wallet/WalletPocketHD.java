@@ -145,9 +145,9 @@ public class WalletPocketHD extends BitWalletBase {
         }
     }
 
-    private WalletPocketHD(String id, List<SimpleHDKeyChain> keychains,
-                           List<AddressType> purposes, CoinType coinType) {
-        super(checkNotNull(coinType), id);
+    WalletPocketHD(String id, List<SimpleHDKeyChain> keychains,
+                   List<AddressType> purposes, CoinType coinType) {
+        super(checkNotNull(coinType), id != null ? id : bundledId(coinType, keychains, purposes));
         checkArgument(!keychains.isEmpty(), "A pocket needs at least one keychain");
         checkArgument(keychains.size() == purposes.size(),
                 "keychains and purposes must be parallel");

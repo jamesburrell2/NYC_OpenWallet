@@ -51,6 +51,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 
@@ -329,18 +330,33 @@ public class WalletPocketProtobufSerializer {
         }
 
         // Read the scrypt parameters that specify how encryption and decryption is performed.
-        SimpleHDKeyChain chain;
-        if (keyCrypter != null) {
-            chain = SimpleHDKeyChain.fromProtobuf(walletProto.getKeyList(), keyCrypter);
-        } else {
-            chain = SimpleHDKeyChain.fromProtobuf(walletProto.getKeyList());
+        // A pocket may hold several purpose keychains concatenated in the key list, each
+        // beginning with its own account-level root key (a distinct 44'/49'/84' path prefix).
+        // Split them back apart; a single group is the ordinary single-path pocket and loads
+        // exactly as before (backward compatible — old wallet files have one group).
+        List<List<Protos.Key>> keyGroups = splitKeychainGroups(walletProto.getKeyList());
+        List<SimpleHDKeyChain> chains = new ArrayList<>(keyGroups.size());
+        for (List<Protos.Key> group : keyGroups) {
+            chains.add(keyCrypter != null
+                    ? SimpleHDKeyChain.fromProtobuf(group, keyCrypter)
+                    : SimpleHDKeyChain.fromProtobuf(group));
         }
 
         WalletPocketHD pocket;
-        if (walletProto.hasId()) {
-            pocket = new WalletPocketHD(walletProto.getId(), chain, coinType);
+        if (chains.size() > 1) {
+            List<com.openwallet.core.coins.AddressType> purposes = new ArrayList<>(chains.size());
+            for (SimpleHDKeyChain chain : chains) {
+                purposes.add(purposeForChain(chain));
+            }
+            String id = walletProto.hasId() ? walletProto.getId() : null;
+            pocket = new WalletPocketHD(id, chains, purposes, coinType);
         } else {
-            pocket = new WalletPocketHD(chain, coinType);
+            SimpleHDKeyChain chain = chains.get(0);
+            if (walletProto.hasId()) {
+                pocket = new WalletPocketHD(walletProto.getId(), chain, coinType);
+            } else {
+                pocket = new WalletPocketHD(chain, coinType);
+            }
         }
 
         if (walletProto.hasDescription()) {
@@ -404,6 +420,52 @@ public class WalletPocketProtobufSerializer {
         }
 
         return pocket;
+    }
+
+    /**
+     * Split a flat, ordered key list into one sublist per keychain. Each keychain starts with
+     * its account-level root key — the first deterministic key defines the account path depth,
+     * and every later deterministic key at that same depth begins a new keychain. A single-path
+     * pocket has exactly one root at that depth and therefore yields a single group, so old
+     * wallet files load unchanged.
+     */
+    private static List<List<Protos.Key>> splitKeychainGroups(List<Protos.Key> keys) {
+        List<List<Protos.Key>> groups = new ArrayList<>();
+        int rootTreeSize = -1;
+        List<Protos.Key> current = null;
+        for (Protos.Key key : keys) {
+            if (key.getType() == Protos.Key.Type.DETERMINISTIC_KEY && key.hasDeterministicKey()) {
+                int pathSize = key.getDeterministicKey().getPathCount();
+                if (rootTreeSize == -1) {
+                    rootTreeSize = pathSize;
+                }
+                if (pathSize == rootTreeSize) {
+                    current = new ArrayList<>();
+                    groups.add(current);
+                }
+            }
+            if (current == null) {
+                // Defensive: a non-deterministic leading key (not expected for HD pockets).
+                current = new ArrayList<>();
+                groups.add(current);
+            }
+            current.add(key);
+        }
+        return groups;
+    }
+
+    /** Map a keychain's account-level purpose (44'/49'/84') to its address script type. */
+    private static com.openwallet.core.coins.AddressType purposeForChain(SimpleHDKeyChain chain) {
+        java.util.List<org.bitcoinj.crypto.ChildNumber> path = chain.getRootKey().getPath();
+        if (!path.isEmpty()) {
+            switch (path.get(0).num()) {
+                case 44: return com.openwallet.core.coins.AddressType.LEGACY;
+                case 49: return com.openwallet.core.coins.AddressType.COMPATIBLE;
+                case 84: return com.openwallet.core.coins.AddressType.NATIVE_SEGWIT;
+                default: break;
+            }
+        }
+        return com.openwallet.core.coins.AddressType.LEGACY;
     }
 
     private void readTransaction(Protos.Transaction txProto, CoinType params) throws UnreadableWalletException {
