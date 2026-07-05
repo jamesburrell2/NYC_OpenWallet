@@ -1,6 +1,7 @@
 package com.openwallet.core.wallet;
 
 import com.openwallet.core.CoreUtils;
+import com.openwallet.core.coins.AddressType;
 import com.openwallet.core.coins.CoinType;
 import com.openwallet.core.coins.Value;
 import com.openwallet.core.coins.families.BitFamily;
@@ -56,6 +57,7 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 import static com.openwallet.core.CoreUtils.bytesToMnemonic;
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -225,6 +227,47 @@ final public class Wallet {
      * (e.g. [44H, 0H, 0H]) instead of the auto-derived index-based path.
      * Falls through to the standard path if customPath is null or empty.
      */
+    /**
+     * Create one Bitcoin account that bundles the three Coinomi derivation branches under a
+     * single account index: {@code m/44'/coin'/N'} (legacy), {@code m/49'/coin'/N'}
+     * (P2SH-segwit) and {@code m/84'/coin'/N'} (native-segwit). The resulting account watches,
+     * receives on and can spend from all three branches, matching Coinomi's "account N".
+     */
+    public WalletAccount createBundledBitcoinAccount(CoinType coinType, int accountIndex,
+                                                     @Nullable KeyParameter key) {
+        checkNotNull(coinType, "Attempting to create a pocket for a null coin");
+        checkArgument(coinType instanceof BitFamily,
+                "Bundled accounts are only supported for Bitcoin-family coins");
+        lock.lock();
+        try {
+            DeterministicHierarchy hierarchy;
+            if (isEncrypted()) {
+                hierarchy = new DeterministicHierarchy(masterKey.decrypt(getKeyCrypter(), key));
+            } else {
+                hierarchy = new DeterministicHierarchy(masterKey);
+            }
+            List<SimpleHDKeyChain> keychains = new ArrayList<>(3);
+            keychains.add(new SimpleHDKeyChain(
+                    hierarchy.get(coinType.getBip44Path(accountIndex), false, true)));
+            keychains.add(new SimpleHDKeyChain(
+                    hierarchy.get(coinType.getBip49Path(accountIndex), false, true)));
+            keychains.add(new SimpleHDKeyChain(
+                    hierarchy.get(coinType.getBip84Path(accountIndex), false, true)));
+            List<AddressType> purposes = ImmutableList.of(
+                    AddressType.LEGACY, AddressType.COMPATIBLE, AddressType.NATIVE_SEGWIT);
+
+            WalletPocketHD pocket =
+                    new WalletPocketHD(keychains, purposes, coinType, getKeyCrypter(), key);
+            if (isEncrypted() && pocket.isEncryptable() && !pocket.isEncrypted()) {
+                pocket.encrypt(getKeyCrypter(), key);
+            }
+            addAccount(pocket);
+            return pocket;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public WalletAccount createAccountAtCustomPath(CoinType coin, List<ChildNumber> customPath,
                                                    boolean generateAllKeys,
                                                    @Nullable KeyParameter key) {
