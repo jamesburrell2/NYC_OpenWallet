@@ -107,6 +107,25 @@ public class WalletPocketHD extends BitWalletBase {
         }
     }
 
+    /**
+     * Returns this account's BIP32 derivation path formatted for display,
+     * e.g. {@code m/84'/0'/7'}. Hardened levels are shown with a trailing
+     * apostrophe.
+     */
+    public String getDerivationPath() {
+        lock.lock();
+        try {
+            StringBuilder sb = new StringBuilder("m");
+            for (ChildNumber cn : keys.getRootKey().getPath()) {
+                sb.append('/').append(cn.num());
+                if (cn.isHardened()) sb.append('\'');
+            }
+            return sb.toString();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     //
     // Serialization support

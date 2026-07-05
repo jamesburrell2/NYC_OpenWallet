@@ -24,6 +24,7 @@ import static com.openwallet.core.Preconditions.checkNotNull;
  */
 public class AccountDetailsFragment extends Fragment {
     private String publicKeySerialized;
+    private String derivationPath;
 
     public static AccountDetailsFragment newInstance(WalletAccount account) {
         AccountDetailsFragment fragment = new AccountDetailsFragment();
@@ -50,6 +51,10 @@ public class AccountDetailsFragment extends Fragment {
         }
 
         publicKeySerialized = account.getPublicKeySerialized();
+
+        if (account instanceof com.openwallet.core.wallet.WalletPocketHD) {
+            derivationPath = ((com.openwallet.core.wallet.WalletPocketHD) account).getDerivationPath();
+        }
     }
 
     @Override
@@ -60,6 +65,15 @@ public class AccountDetailsFragment extends Fragment {
         TextView publicKey = (TextView) view.findViewById(R.id.public_key);
         publicKey.setOnClickListener(getPubKeyOnClickListener());
         publicKey.setText(publicKeySerialized);
+
+        TextView pathLabel = (TextView) view.findViewById(R.id.derivation_path_label);
+        TextView pathView = (TextView) view.findViewById(R.id.derivation_path);
+        if (derivationPath != null && !derivationPath.isEmpty()) {
+            pathView.setText(derivationPath);
+        } else {
+            pathLabel.setVisibility(View.GONE);
+            pathView.setVisibility(View.GONE);
+        }
 
         ImageView qrView = (ImageView) view.findViewById(R.id.qr_code_public_key);
         QrUtils.setQr(qrView, getResources(), publicKeySerialized);

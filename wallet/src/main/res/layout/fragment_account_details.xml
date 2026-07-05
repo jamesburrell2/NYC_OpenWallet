@@ -50,6 +50,23 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/account_public_key_warning" />
+
+                    <TextView
+                        android:id="@+id/derivation_path_label"
+                        style="@style/SecondaryText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/quarter_standard_margin"
+                        android:text="@string/account_derivation_path_label" />
+
+                    <TextView
+                        android:id="@+id/derivation_path"
+                        style="@style/NormalText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textIsSelectable="true"
+                        android:typeface="monospace"
+                        tools:text="m/84'/0'/7'" />
                 </LinearLayout>
 
                 <LinearLayout
