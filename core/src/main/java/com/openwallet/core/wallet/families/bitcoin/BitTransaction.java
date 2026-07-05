@@ -74,7 +74,11 @@ public final class BitTransaction implements AbstractTransaction {
     }
 
     public BitTransaction(CoinType type, byte[] rawTx) {
-        this(new Transaction(type, rawTx));
+        // The bundled bitcoinj-core-0.12.3 predates SegWit and cannot parse a
+        // BIP141 (witness) serialized transaction. Strip the witness to the
+        // legacy serialization (over which the txid is defined) first.
+        this(new Transaction(type,
+                com.openwallet.core.wallet.SegwitTransactionSerializer.stripWitness(rawTx)));
     }
 
     public static BitTransaction fromTrimmed(Sha256Hash transactionId, Transaction transaction,
