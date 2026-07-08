@@ -211,8 +211,13 @@ public class AddressRequestFragment extends WalletFragment {
         if (type == null) return view;
         sendCoinAmountView.resetType(type, true);
 
+        // Guard a stale persisted selection that is no longer effective (e.g. NYC pre-activation)
+        java.util.Set<AddressType> effective = effectiveTypes();
+        if (!effective.contains(selectedAddressType)) {
+            selectedAddressType = AddressType.LEGACY;
+        }
         // Configure address type tab strip for SegWit-capable coins
-        if (type.getSupportedAddressTypes().size() > 1) {
+        if (effective.size() > 1) {
             addressTypeRadioGroup.setVisibility(View.VISIBLE);
 
             // Fixed display order: Default (NATIVE_SEGWIT), Compatibility (COMPATIBLE), Legacy (LEGACY)
@@ -224,7 +229,7 @@ public class AddressRequestFragment extends WalletFragment {
                     getString(R.string.address_type_legacy) };
 
             for (int i = 0; i < displayOrder.length; i++) {
-                if (!type.getSupportedAddressTypes().contains(displayOrder[i])) continue;
+                if (!effective.contains(displayOrder[i])) continue;
                 RadioButton btn = new RadioButton(getActivity());
                 btn.setId(View.generateViewId());
                 btn.setText(tabLabels[i]);
@@ -444,7 +449,7 @@ public class AddressRequestFragment extends WalletFragment {
         if (showAddress != null) {
             receiveAddress = showAddress;
             // Hide tab strip and custom path when showing a historical address
-            if (type.getSupportedAddressTypes().size() > 1) {
+            if (effectiveTypes().size() > 1) {
                 addressTypeRadioGroup.setVisibility(View.GONE);
                 customPathToggle.setVisibility(View.GONE);
                 customPathRow.setVisibility(View.GONE);
@@ -490,7 +495,7 @@ public class AddressRequestFragment extends WalletFragment {
                         displayKey = wallet.deriveKeyAtFullPath(path);
                         if (displayKey != null) {
                             AddressType addrType = inferAddressType(path);
-                            if (!type.getSupportedAddressTypes().contains(addrType)) {
+                            if (!effectiveTypes().contains(addrType)) {
                                 addrType = AddressType.LEGACY;
                             }
                             try {
@@ -504,10 +509,10 @@ public class AddressRequestFragment extends WalletFragment {
                 if (receiveAddress == null) receiveAddress = legacyAddr;
 
             } else if (selectedAddressType == AddressType.LEGACY
-                    || type.getSupportedAddressTypes().size() == 1) {
+                    || effectiveTypes().size() == 1) {
                 receiveAddress = legacyAddr;
                 // Capture the DK for path display
-                if (type.getSupportedAddressTypes().size() > 1 && account instanceof WalletPocketHD) {
+                if (effectiveTypes().size() > 1 && account instanceof WalletPocketHD) {
                     try {
                         byte[] hash160 = ((BitAddress) legacyAddr).getHash160();
                         ECKey rawKey = ((WalletPocketHD) account).findKeyFromPubHash(hash160);
@@ -563,7 +568,7 @@ public class AddressRequestFragment extends WalletFragment {
         updateQrCode(getUri());
 
         // Populate derivation path for multi-type coins
-        if (type.getSupportedAddressTypes().size() > 1 && derivationPathView != null && showAddress == null) {
+        if (effectiveTypes().size() > 1 && derivationPathView != null && showAddress == null) {
             String customPathStr = (customPathInput != null)
                     ? customPathInput.getText().toString().trim() : "";
             if (!customPathStr.isEmpty()) {
@@ -612,6 +617,13 @@ public class AddressRequestFragment extends WalletFragment {
             if (purpose == 49) return AddressType.COMPATIBLE;
         }
         return AddressType.LEGACY;
+    }
+
+    /** Address types effective for this account right now, honoring height-gated SegWit. */
+    private java.util.Set<AddressType> effectiveTypes() {
+        int height = (account instanceof WalletPocketHD)
+                ? ((WalletPocketHD) account).getLastBlockSeenHeight() : -1;
+        return type.effectiveAddressTypes(height);
     }
 
     private String getUri() {
