@@ -52,8 +52,9 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
     protected Set<AddressType> supportedAddressTypes =
             Collections.unmodifiableSet(EnumSet.of(AddressType.LEGACY));
     protected String bech32Hrp = null;
-    /** False if SegWit is not yet activated on this coin's network. */
-    protected boolean segwitActivated = true;
+    /** Block height at which SegWit activates on this coin's network.
+     *  0 means already active (the default for coins that shipped with SegWit). */
+    protected int segwitActivationHeight = 0;
 
     private transient MonetaryFormat friendlyFormat;
     private transient MonetaryFormat plainFormat;
@@ -133,8 +134,27 @@ abstract public class CoinType extends NetworkParameters implements ValueType, S
 
     public String getBech32Hrp() { return bech32Hrp; }
 
-    /** Returns false if SegWit has not yet activated on this coin's network. */
-    public boolean isSegwitActivated() { return segwitActivated; }
+    /** Block height at which SegWit activates; 0 means already active. */
+    public int getSegwitActivationHeight() { return segwitActivationHeight; }
+
+    /** True if SegWit is active at the given (wallet-synced) block height.
+     *  A negative/unknown height fails closed (legacy-only). */
+    public boolean isSegwitActivatedAt(int height) {
+        return segwitActivationHeight <= 0 || (height >= 0 && height >= segwitActivationHeight);
+    }
+
+    /** Static "already active" check for paths with no synced height (e.g. add-coin). */
+    public boolean isSegwitActivated() { return segwitActivationHeight <= 0; }
+
+    /** Address types that may be used/shown at the given synced height: the full
+     *  supported set once SegWit is active, otherwise supported minus the SegWit types. */
+    public Set<AddressType> effectiveAddressTypes(int height) {
+        if (isSegwitActivatedAt(height)) return supportedAddressTypes;
+        EnumSet<AddressType> effective = EnumSet.copyOf(supportedAddressTypes);
+        effective.remove(AddressType.COMPATIBLE);
+        effective.remove(AddressType.NATIVE_SEGWIT);
+        return Collections.unmodifiableSet(effective);
+    }
 
     @Nullable
     public MessageFactory getMessagesFactory() {

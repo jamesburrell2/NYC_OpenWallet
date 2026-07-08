@@ -34,7 +34,7 @@ public class NewYorkCoinMain extends BitFamily {
                 AddressType.LEGACY,
                 AddressType.COMPATIBLE,
                 AddressType.NATIVE_SEGWIT));
-        segwitActivated = false;      // flip to true once SegWit activates on mainnet
+        segwitActivationHeight = 13_500_000;   // buried SegWit activation on NYC mainnet
     }
 
     private static NewYorkCoinMain instance = new NewYorkCoinMain();
