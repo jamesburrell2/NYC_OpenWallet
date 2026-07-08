@@ -351,10 +351,12 @@ public class SimpleHDKeyChain implements EncryptableKeyChain, KeyBag {
      */
     public boolean isIssued(DeterministicKey key) {
         if (!isLeaf(key)) return false;
-        if (key.getParent() == externalKey) {
+        // Compare by value (equals), matching getActiveKeys(); robust across a reloaded
+        // pocket where the parent may be a different-but-equal DeterministicKey instance.
+        if (externalKey.equals(key.getParent())) {
             return key.getChildNumber().num() < issuedExternalKeys;
         }
-        if (key.getParent() == internalKey) {
+        if (internalKey.equals(key.getParent())) {
             return key.getChildNumber().num() < issuedInternalKeys;
         }
         return false;
