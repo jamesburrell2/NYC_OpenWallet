@@ -751,28 +751,32 @@ public class WalletPocketHD extends BitWalletBase {
         lock.lock();
         try {
             ImmutableList.Builder<AbstractAddress> activeAddresses = ImmutableList.builder();
+            boolean segwitOn = type.isSegwitActivatedAt(getLastBlockSeenHeight());
             if (bundled) {
                 // Each branch has its OWN keys; emit only that branch's script type so the
                 // watched addresses match Coinomi's per-purpose derivation exactly.
                 for (int i = 0; i < keychains.size(); i++) {
                     AddressType purpose = purposes.get(i);
-                    for (DeterministicKey key : keychains.get(i).getActiveKeys()) {
+                    boolean segwitPurpose = purpose == AddressType.COMPATIBLE
+                            || purpose == AddressType.NATIVE_SEGWIT;
+                    SimpleHDKeyChain kc = keychains.get(i);
+                    for (DeterministicKey key : kc.getActiveKeys()) {
+                        // Pre-activation, skip a segwit branch's not-yet-issued keys.
+                        if (segwitPurpose && !segwitOn && !kc.isIssued(key)) continue;
                         activeAddresses.add(type.addressFromKey(key, purpose));
                     }
                 }
             } else {
-                // Single-path pocket: keep the historical behaviour of emitting every
-                // supported script type from the one key, so already-saved pockets behave
-                // identically and no previously-watched address is dropped.
+                // Single-path pocket: emit legacy for every key, and segwit types either
+                // once activated at the synced height or for already-issued (used) keys.
                 Set<AddressType> supported = type.getSupportedAddressTypes();
                 for (DeterministicKey key : keys.getActiveKeys()) {
-                    // Always emit legacy (all coins support it)
                     activeAddresses.add(type.addressFromKey(key, AddressType.LEGACY));
-                    // Emit SegWit address types for coins that support them
-                    if (supported.contains(AddressType.COMPATIBLE)) {
+                    boolean emitSegwit = segwitOn || keys.isIssued(key);
+                    if (emitSegwit && supported.contains(AddressType.COMPATIBLE)) {
                         activeAddresses.add(type.addressFromKey(key, AddressType.COMPATIBLE));
                     }
-                    if (supported.contains(AddressType.NATIVE_SEGWIT)) {
+                    if (emitSegwit && supported.contains(AddressType.NATIVE_SEGWIT)) {
                         activeAddresses.add(type.addressFromKey(key, AddressType.NATIVE_SEGWIT));
                     }
                     // TAPROOT is receive/display only — not included in watch list
