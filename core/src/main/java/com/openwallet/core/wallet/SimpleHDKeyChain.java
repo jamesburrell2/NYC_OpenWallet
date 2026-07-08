@@ -344,6 +344,22 @@ public class SimpleHDKeyChain implements EncryptableKeyChain, KeyBag {
         return k;
     }
 
+    /**
+     * Returns true if the key is a leaf that has already been issued (its child index is
+     * below the issued counter for its branch). Lookahead keys return false. Used to keep
+     * watching already-issued addresses while gating not-yet-issued ones.
+     */
+    public boolean isIssued(DeterministicKey key) {
+        if (!isLeaf(key)) return false;
+        if (key.getParent() == externalKey) {
+            return key.getChildNumber().num() < issuedExternalKeys;
+        }
+        if (key.getParent() == internalKey) {
+            return key.getChildNumber().num() < issuedInternalKeys;
+        }
+        return false;
+    }
+
     @Override
     public DeterministicKey findKeyFromPubHash(byte[] pubkeyHash) {
         lock.lock();
