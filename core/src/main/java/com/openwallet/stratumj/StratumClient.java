@@ -75,6 +75,13 @@ public class StratumClient extends AbstractExecutionThreadService {
      * into thousands of redundant shutdowns (one per failing in-flight write). */
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
+    /** Rate-limits logging of server-side error replies. An overloaded server (e.g. one
+     * replying "server busy - request timed out") can reject hundreds of requests per second;
+     * logging a full stack trace for each floods logcat and janks the UI. We log at most once
+     * per second with a count of how many were suppressed. */
+    private volatile long lastFailedCallLogMs = 0;
+    private final AtomicLong suppressedFailedCalls = new AtomicLong();
+
     final private ExecutorService pool = Executors.newFixedThreadPool(NUM_OF_WORKERS);
 
     final private ConcurrentHashMap<Long, SettableFuture<ResultMessage>> callers =
@@ -260,15 +267,23 @@ public class StratumClient extends AbstractExecutionThreadService {
             }
 
             if (reply.errorOccured()) {
-                Exception e = new MessageException(reply.getError(), reply.getFailedRequest());
-                log.error("Failed call", e);
-                // TODO set exception to the correct future object
-//                if (callers.containsKey()) {
-//                    SettableFuture<ResultMessage> future = callers.get();
-//                    future.setException(e);
-//                } else {
-//                    log.error("Failed orphaned call", e);
-//                }
+                MessageException e = new MessageException(reply.getError(), reply.getFailedRequest());
+                // Complete the waiting caller (if any) so it fails fast instead of hanging in
+                // the callers map until the whole connection is torn down.
+                SettableFuture<ResultMessage> future = callers.remove(reply.getId());
+                if (future != null) {
+                    future.setException(e);
+                }
+                // Rate-limit: a busy server can reject hundreds of requests per second and a
+                // stack trace per rejection floods logcat. Log a throttled summary instead.
+                suppressedFailedCalls.incrementAndGet();
+                long now = System.currentTimeMillis();
+                if (now - lastFailedCallLogMs > 1000) {
+                    lastFailedCallLogMs = now;
+                    long n = suppressedFailedCalls.getAndSet(0);
+                    log.info("Server rejected {} request(s) in the last interval; latest: {}",
+                            n, e.getMessage());
+                }
             } else {
                 boolean added = false;
 
